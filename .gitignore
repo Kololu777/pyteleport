@@ -1,0 +1,17 @@
+.mypy_cache
+__pycache__*
+*.egg-info
+
+
+.ruff_cache
+.pytest_cache
+.venv
+.vscode
+  
+# Private Dataset
+mini_docs
+mini_scripts
+mini_data
+no_used
+data
+artifacts
