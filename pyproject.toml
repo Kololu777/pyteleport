@@ -3,11 +3,23 @@ name = "pyteleport"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
+    "pathspec>=0.12.1",
     "pyteleport",
     "rich>=13.9.4",
 ]
 
 [tool.uv.sources]
 pyteleport = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "gitingest>=0.1.4",
+    "pytest>=8.3.5",
+    "ruff>=0.9.10",
+]
+
+[project.scripts]
+gitignore-stub = "pyteleport.cli.gitignore_stub:main"
+stabdir = "pyteleport.cli.stabdir:main"

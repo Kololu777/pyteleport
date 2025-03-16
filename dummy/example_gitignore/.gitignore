@@ -1,0 +1,51 @@
+# Ignore all text files
+*.txt
+
+# Ignore markdown files in the docs directory (only at root level)
+/docs/*.md
+
+# Ignore the entire build directory
+build/
+
+# Ignore logs directory at any level
+**/logs
+
+# Ignore all files in .venv directory
+.venv/*
+
+# Ignore all files in node_modules and its subdirectories
+node_modules/**
+
+# not include line
+
+# Ignore any file named 'b' in any subdirectory of 'a'
+a/**/b
+
+# Ignore all files ending with 'log'
+*log
+
+# But don't ignore import.log (negation rule)
+!import.log
+
+# Ignore directories like temp0, temp1, etc.
+temp[0-9]/
+
+# Ignore files like file1.js, fileA.js, etc.
+file?.js
+
+# Ignore root-only.txt only at the root level
+/root-only.mdc
+
+# Ignore all spec.js files in any test directory under src
+src/**/test/**/*.spec.js
+
+# Ignore all .env files except .env.example
+.env*
+!.env.example
+
+# Ignore all files in dist directory except .gitkeep
+dist/*
+!dist/.gitkeep
+
+# Ignore all .cache directories at any level
+**/.cache/
