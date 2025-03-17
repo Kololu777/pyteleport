@@ -1,8 +1,8 @@
 from .algorithm import apply_asterisk_rule
-from .tree import Tree, tree
+from .tree import TeleportTree, teleport_tree
 
 __all__ = [
-    "Tree",
-    "tree",
+    "TeleportTree",
+    "teleport_tree",
     "apply_asterisk_rule",
 ]

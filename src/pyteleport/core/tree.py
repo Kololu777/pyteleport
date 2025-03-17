@@ -1,12 +1,13 @@
 import os
 
+from binaryornot.check import is_binary
 from rich import print
 
 from pyteleport.core.algorithm import apply_asterisk_rule
 from pyteleport.rule import CompositeRule
 
 
-def tree(
+def teleport_tree(
     path: str,
     rule_fn: CompositeRule | None = None,
     _prefix: str = "",
@@ -68,15 +69,15 @@ def tree(
         _visited_list[parent_idx]["children"].append(len(_visited_list) - 1)
         if os.path.isdir(full_path):
             next_prefix = _prefix + ("    " if idx == entries_count - 1 else "│   ")
-            tree(full_path, rule_fn, next_prefix, _visited_list)
+            teleport_tree(full_path, rule_fn, next_prefix, _visited_list)
     return _visited_list
 
 
-class Tree:
+class TeleportTree:
     def __init__(self, path: str, rule_fn: CompositeRule | None = None):
         self._path = self._first_path = path
         self.rule_fn = rule_fn
-        self._tree_list = tree(path, rule_fn)
+        self._tree_list = teleport_tree(path, rule_fn)
 
     @property
     def tree_list(self) -> list[str]:
@@ -142,14 +143,36 @@ class Tree:
 
         _update_path_recursive(0)
 
+    def _judge_binary_file(self) -> bool:
+        for tree_dict in self._tree_list:
+            if tree_dict["is_dir"]:
+                tree_dict["is_binary"] = "dir"
+            elif is_binary(tree_dict["path"]):
+                tree_dict["is_binary"] = "binary"
+            else:
+                tree_dict["is_binary"] = "text"
+        return self._tree_list
+
+    def add_binary_info(self) -> None:
+        self._tree_list = self._judge_binary_file()
+
 
 if __name__ == "__main__":
+    from pyteleport.rule import RuleFactory
+    rule = RuleFactory.create_rule(
+        "glob", exclude_patterns=["*.pyc","__pycache__", "*/__pycache__/**", "*/__pycache__/**/*"]
+    )
+    t = TeleportTree("./src/pyteleport/rule/", rule_fn=rule)
+    t.change_name_root("./tests/test_rule/")
+    t.all_change_name_leaf(change_rule="test_*")
+    t.print
+    """
     from pyteleport.rule import RuleFactory
 
     config = [
         {
             "type": "glob",
-            #"include_patterns": ["*.py"],
+            # "include_patterns": ["*.py"],
             "exclude_patterns": [
                 "*.egg-info",
                 "*.pyc",
@@ -162,11 +185,16 @@ if __name__ == "__main__":
     ]
     rule_fn = RuleFactory.create_composite_rule(config)
 
-    #rule_fn = RuleFactory.create_rule("glob", include_patterns=["pyteleport/**"])
-    tree = Tree("./src/", rule_fn=rule_fn)
+    # rule_fn = RuleFactory.create_rule("glob", include_patterns=["pyteleport/**"])
+    #tree = Tree("./src/", rule_fn=rule_fn)
+    tree = Tree("./src")
     tree.print
     tree.change_name_root("./tests")
     tree.all_change_name_leaf(change_rule="test_*")
     tree.print
 
     print(tree._tree_list)
+
+    tree.add_binary_info()
+    print(tree._tree_list)
+    """

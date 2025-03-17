@@ -1,3 +1,3 @@
-from .core import tree, Tree
+from .core import TeleportTree, teleport_tree
 
-__all__ = ["tree", "Tree"]
+__all__ = ["TeleportTree", "teleport_tree"]
