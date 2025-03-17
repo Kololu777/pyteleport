@@ -94,6 +94,7 @@ class TestGitignoreRule:
         - expected: True if the file should be included, False if it should be ignored
         """
         assert gitignore_rule.matches(query) == expected
+        assert gitignore_rule.is_include(query) == expected
         assert not gitignore_rule.is_exclude(query) == expected
 
     @pytest.mark.parametrize(
@@ -110,6 +111,7 @@ class TestGitignoreRule:
     def test_rule_precedence(self, gitignore_rule, query, expected_match):
         """Test that later rules override earlier rules, and negation works correctly"""
         assert gitignore_rule.matches(query) == expected_match
+        assert gitignore_rule.is_include(query) == expected_match
         assert gitignore_rule.is_exclude(query) != expected_match
 
     @pytest.mark.parametrize(

@@ -1,19 +1,27 @@
+import pytest
+
 from pyteleport.rule import HiddenFileRule
 
 
 class TestHiddenFileRule:
-    def test_matches_non_hidden_file(self):
+    @pytest.mark.parametrize(
+        "file_name, expected", [("test.py", True), (".hidden.py", False)]
+    )
+    def test_matches(self, file_name, expected):
         rule = HiddenFileRule()
-        assert rule.matches("test.py")
+        assert rule.matches(file_name) == expected
 
-    def test_matches_hidden_file(self):
-        rule = HiddenFileRule()
-        assert not rule.matches(".hidden.py")
 
-    def test_is_exclude_non_hidden_file(self):
+    @pytest.mark.parametrize(
+        "file_name, expected", [("test.py", True), (".hidden.py", False)]
+    )
+    def test_is_include(self, file_name, expected):
         rule = HiddenFileRule()
-        assert not rule.is_exclude("test.py")
+        assert rule.is_include(file_name) == expected
 
-    def test_is_exclude_hidden_file(self):
+    @pytest.mark.parametrize(
+        "file_name, expected", [("test.py", False), (".hidden.py", True)]
+    )
+    def test_is_exclude(self, file_name, expected):
         rule = HiddenFileRule()
-        assert rule.is_exclude(".hidden.py")
+        assert rule.is_exclude(file_name) == expected

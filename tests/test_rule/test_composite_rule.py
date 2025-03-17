@@ -1,5 +1,3 @@
-import pytest
-
 from pyteleport.rule import CompositeRule, GlobRule, HiddenFileRule
 
 

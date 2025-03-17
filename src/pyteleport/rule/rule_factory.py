@@ -24,6 +24,7 @@ class RuleFactory:
             if "gitignore_path" not in kwargs:
                 if os.path.exists("./.gitignore"):
                     rules = GitignoreRule.load("./.gitignore")
+                    return CompositeRule(rules=[rules])
                 raise ValueError("gitignore_path is required")
             rules = GitignoreRule.load(kwargs.get("gitignore_path"))
             return CompositeRule(rules=[rules])
