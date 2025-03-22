@@ -1,0 +1,59 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: git command rules
+globs: 
+---
+# Git magic command
+| **Command usage** | **Excetion Steps**|
+| %gm | Firstly, review your staged changes carefully by running git diff --staged. Secondly, summarize the key points of your changes clearly and concisely-ideally in bullet points or short notes. Next, carefully read the "How to write commit message" section and follow the provided example to compose your commit message. Finally, commit your summarized change using `git commit`.|
+| %gb | First, run the command: `git switch -c cursor-composer-bot`, if You did't switched branch, run the command `git checkout cursor-composer-bot`  |
+| %gp | First, stage the code you have written using the `git add command`. Next, follow the steps of `%gm`. Then execute `git push --set-upstream origin cursor-composer-bot`. Finally, if the current branch is `cursor-composer-bot`, delete the branch. |
+# Git Commit Rules Template
+
+| Emoji | Shortcode | Prefix/Keyword | Meaning/Usage | Example Commit Message |
+|-------|-----------|----------------|---------------|------------------------|
+| ✨ | `:sparkles:` | feat | Add new feature | ✨ feat: Add Transformer-based image classifier |
+| 🐛 | `:bug:` | fix | Bug fix | 🐛 fix: Fix mismatched image size during GPU inference |
+| 📝 | `:memo:` | docs | Documentation update | 📝 docs: Add image augmentation examples to README |
+| 🚀 | `:rocket:` | perf | Performance improvement (accuracy/speed) | 🚀 perf: Improve model accuracy by ~3% |
+| 📈 | `:chart_with_upwards_trend:` | train | Improve/adjust training methods | 📈 train: Switch scheduler to CosineAnnealing |
+| 🧪 | `:test_tube:` | test | Add or update tests | 🧪 test: Add unit tests for segmentation model |
+| 🎨 | `:art:` | style | Code formatting/readability improvements | 🎨 style: Format code using Black |
+| 🔧 | `:wrench:` | config | Modify configuration files | 🔧 config: Tune hyperparameters for ResNet50 |
+| ♻️ | `:recycle:` | refactor | Code refactoring (cleanup/organization) | ♻️ refactor: Modularize and clean DataLoader code |
+| 📦 | `:package:` | dep | Update dependencies | 📦 dep: Update torchvision to 0.17.2 |
+| 📌 | `:pushpin:` | pin | Pin dependency versions | 📌 pin: Pin torch version to 2.3.0 |
+| 🔥 | `:fire:` | hotfix | Critical hotfix | 🔥 hotfix: Fix segmentation fault during training |
+| 🗑️ | `:wastebasket:` | remove | Remove unused code/files | 🗑️ remove: Delete unused preprocessing scripts |
+| 🚧 | `:construction:` | wip | Work-in-progress commit | 🚧 wip: Developing new DataAugmentation methods |
+| ✅ | `:white_check_mark:` | ci | CI/CD environment changes | ✅ ci: Integrate tests into GitHub Actions |
+| 🔖 | `:bookmark:` | release | Version release-related changes | 🔖 release: Release version v1.3.0 |
+| 🚨 | `:rotating_light:` | warning | Deprecation/warning added | 🚨 warning: Add warning for deprecated functions |
+
+## How to write commit message
+
+Tempalte:
+```git
+git commit -m "<short summary>" \ 
+-m "<your concise summary1>" \ 
+-m ""<your concise summary1>"
+```
+
+Example:
+
+```git
+git commit -m "🐛 fix: Fix tensor dimension mismatch on inference"
+```
+
+or
+
+```git
+git commit -m "✨ feat: Initial setup for sakuramoti library" \ 
+- m "- Core structure with optical flow, tracking, augmentation" \
+- m "RAFT, PIPS implementations" \
+- m "Testing setup, docs, dev environment"
+```
