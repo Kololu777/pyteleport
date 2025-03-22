@@ -3,7 +3,7 @@ from pyteleport.rule import CompositeRule
 
 
 class SingleFile:
-    def __init__(self, path: str, rule_fn: CompositeRule, template: str | None = None):
+    def __init__(self, path: str, rule_fn: CompositeRule, template: str | None = None, output_path: str | None = None):
         self._tree = Tree(path, rule_fn)
         self._tree.add_binary_info()
         if template is None:
@@ -14,6 +14,11 @@ class SingleFile:
             if "{file_name}" not in template:
                 raise ValueError("template must contain {file_name}")
             self._template = template
+
+        if output_path is None:
+            self._output_path = "onefile.txt"
+        else:
+            self._output_path = output_path
 
     def _get_template(self, file_name: str) -> str:
         return self._template.format(file_name=file_name)
@@ -26,5 +31,5 @@ class SingleFile:
                     text = f.read()
                 onefile_text += self._get_template(tree_dict["name"])
                 onefile_text += text
-        with open("onefile.txt", "w") as f:
+        with open(self._output_path, "w") as f:
             f.write(onefile_text)

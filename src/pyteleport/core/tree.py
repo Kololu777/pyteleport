@@ -5,6 +5,7 @@ from rich import print
 
 from pyteleport.core.algorithm import apply_asterisk_rule
 from pyteleport.rule import CompositeRule
+from pyteleport.rule.rule_factory import RuleFactory
 
 
 def teleport_tree(
@@ -47,8 +48,6 @@ def teleport_tree(
 
     entries = os.listdir(path)
     if rule_fn is not None:
-        print(entries)
-        print(rule_fn.matches("pyteleport"))
         entries = [entry for entry in entries if rule_fn.matches(entry)]
     entries_count = len(entries)
 
@@ -74,10 +73,22 @@ def teleport_tree(
 
 
 class TeleportTree:
-    def __init__(self, path: str, rule_fn: CompositeRule | None = None):
+    def __init__(
+        self,
+        path: str,
+        include_patterns: list[str] = None,
+        exclude_patterns: list[str] = None,
+        special_words: list[str] = None,
+        gitignore_path: str = "./gitignore",
+    ):
         self._path = self._first_path = path
-        self.rule_fn = rule_fn
-        self._tree_list = teleport_tree(path, rule_fn)
+        self.rule_fn = RuleFactory.simplify_create_rule(
+            include_patterns,
+            exclude_patterns,
+            special_words,
+            gitignore_path=gitignore_path,
+        )
+        self._tree_list = teleport_tree(path, self.rule_fn)
 
     @property
     def tree_list(self) -> list[str]:
@@ -156,11 +167,43 @@ class TeleportTree:
     def add_binary_info(self) -> None:
         self._tree_list = self._judge_binary_file()
 
+    def exclude_leaf(self, exclude_patterns: list[str]) -> None:
+        """
+        Exclude leaves from the tree that match the given patterns.
+
+        Args:
+            exclude_patterns: List of glob patterns to exclude
+        """
+        if not exclude_patterns:
+            return
+
+        from fnmatch import fnmatch
+
+        # Create a new tree_list excluding matching files
+        new_tree_list = []
+        for item in self._tree_list:
+            # Keep directories and files that don't match any exclude pattern
+            if item["is_dir"]:
+                new_tree_list.append(item)
+            else:
+                filename = os.path.basename(item["path"])
+                if not any(fnmatch(filename, pattern) for pattern in exclude_patterns):
+                    new_tree_list.append(item)
+
+        self._tree_list = new_tree_list
+
 
 if __name__ == "__main__":
     from pyteleport.rule import RuleFactory
-    rule = RuleFactory.create_rule(
-        "glob", exclude_patterns=["*.pyc","__pycache__", "*/__pycache__/**", "*/__pycache__/**/*"]
+
+    rule = RuleFactory._create_rule(
+        "glob",
+        exclude_patterns=[
+            "*.pyc",
+            "__pycache__",
+            "*/__pycache__/**",
+            "*/__pycache__/**/*",
+        ],
     )
     t = TeleportTree("./src/pyteleport/rule/", rule_fn=rule)
     t.change_name_root("./tests/test_rule/")

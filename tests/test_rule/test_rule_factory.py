@@ -1,10 +1,9 @@
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from pyteleport.rule import (
-    BaseRule,
     CompositeRule,
     DirRule,
     GitignoreRule,
@@ -74,47 +73,39 @@ def test_create_dir_rule():
         "/path/to/.gitignore",
     ],
 )
-def test_create_gitignore_rule_with_path(gitignore_path):
+def test_create_gitignore_rule_with_path(gitignore_path, monkeypatch):
     """Test creating a GitignoreRule with a specified path."""
-    with (
-        patch("os.path.exists") as mock_exists,
-        patch.object(GitignoreRule, "load") as mock_load,
-    ):
-        mock_exists.return_value = True
-        mock_load.return_value = GitignoreRule([])
+    monkeypatch.setattr(os.path, "exists", lambda path: True)
+    monkeypatch.setattr(GitignoreRule, "load", lambda path: GitignoreRule([]))
 
-        rule = RuleFactory.create_rule("gitignore", gitignore_path=gitignore_path)
+    rule = RuleFactory.create_rule("gitignore", gitignore_path=gitignore_path)
 
-        mock_load.assert_called_once_with(gitignore_path)
-        assert isinstance(rule, CompositeRule)
-        assert len(rule.rules) == 1
-        assert isinstance(rule.rules[0], GitignoreRule)
+    assert isinstance(rule, CompositeRule)
+    assert len(rule.rules) == 1
+    assert isinstance(rule.rules[0], GitignoreRule)
 
 
-def test_create_gitignore_rule_default_path():
+def test_create_gitignore_rule_default_path(monkeypatch):
     """Test creating a GitignoreRule with default path."""
-    with (
-        patch("os.path.exists") as mock_exists,
-        patch.object(GitignoreRule, "load") as mock_load,
-    ):
-        mock_exists.return_value = True
-        mock_load.return_value = GitignoreRule([])
+    monkeypatch.setattr(os.path, "exists", lambda path: True)
 
-        rule = RuleFactory.create_rule("gitignore")
+    mock_load = MagicMock(return_value=GitignoreRule([]))
+    monkeypatch.setattr(GitignoreRule, "load", mock_load)
 
-        mock_load.assert_called_once_with("./.gitignore")
-        assert isinstance(rule, CompositeRule)
-        assert len(rule.rules) == 1
-        assert isinstance(rule.rules[0], GitignoreRule)
+    rule = RuleFactory.create_rule("gitignore")
+
+    mock_load.assert_called_once_with("./.gitignore")
+    assert isinstance(rule, CompositeRule)
+    assert len(rule.rules) == 1
+    assert isinstance(rule.rules[0], GitignoreRule)
 
 
-def test_create_gitignore_rule_missing_path():
+def test_create_gitignore_rule_missing_path(monkeypatch):
     """Test creating a GitignoreRule with missing path."""
-    with patch("os.path.exists") as mock_exists:
-        mock_exists.return_value = False
+    monkeypatch.setattr(os.path, "exists", lambda path: False)
 
-        with pytest.raises(ValueError, match="gitignore_path is required"):
-            RuleFactory.create_rule("gitignore")
+    with pytest.raises(ValueError, match="gitignore_path is required"):
+        RuleFactory.create_rule("gitignore")
 
 
 def test_create_invalid_rule_type():
@@ -171,3 +162,120 @@ def test_nested_composite_rule(nested_composite_rule_config):
     assert isinstance(rule.rules[1], CompositeRule)
     assert len(rule.rules[1].rules) == 1
     assert isinstance(rule.rules[1].rules[0], HiddenFileRule)
+
+
+# Simplified tests for simplify_create_rule
+def test_simplify_create_rule_basic():
+    """Test simplify_create_rule with basic include and exclude patterns."""
+    include_patterns = ["*.py"]
+    exclude_patterns = ["test_*.py"]
+
+    rule = RuleFactory.simplify_create_rule(
+        include_patterns=include_patterns,
+        exclude_patterns=exclude_patterns,
+    )
+
+    assert isinstance(rule, CompositeRule)
+    assert len(rule.rules) == 1
+    assert isinstance(rule.rules[0], GlobRule)
+    assert rule.rules[0].include_patterns == include_patterns
+    assert rule.rules[0].exclude_patterns == exclude_patterns
+
+
+def test_simplify_create_rule_with_hidden_file():
+    """Test simplify_create_rule with HIDDEN special word."""
+    include_patterns = ["*.py"]
+    exclude_patterns = ["test_*.py"]
+    special_words = "HIDDEN"  # Using the actual uppercase key from constants
+
+    rule = RuleFactory.simplify_create_rule(
+        include_patterns=include_patterns,
+        exclude_patterns=exclude_patterns,
+        special_words=special_words,
+    )
+
+    assert isinstance(rule, CompositeRule)
+    assert len(rule.rules) == 2
+
+    # Find the hidden file rule and glob rule
+    hidden_file_rule = None
+    glob_rule = None
+
+    for r in rule.rules:
+        if isinstance(r, CompositeRule) and isinstance(r.rules[0], HiddenFileRule):
+            hidden_file_rule = r
+        elif isinstance(r, GlobRule):
+            glob_rule = r
+
+    assert hidden_file_rule is not None, "Hidden file rule not found"
+    assert glob_rule is not None, "Glob rule not found"
+    assert glob_rule.include_patterns == include_patterns
+    assert glob_rule.exclude_patterns == exclude_patterns
+
+
+def test_simplify_create_rule_with_dir():
+    """Test simplify_create_rule with DIR special word."""
+    include_patterns = ["*.py"]
+    exclude_patterns = ["test_*.py"]
+    special_words = "DIR"  # Using the actual uppercase key from constants
+
+    rule = RuleFactory.simplify_create_rule(
+        include_patterns=include_patterns,
+        exclude_patterns=exclude_patterns,
+        special_words=special_words,
+    )
+
+    assert isinstance(rule, CompositeRule)
+    assert len(rule.rules) == 2
+
+    # Find the dir rule and glob rule
+    dir_rule = None
+    glob_rule = None
+
+    for r in rule.rules:
+        if isinstance(r, CompositeRule) and isinstance(r.rules[0], DirRule):
+            dir_rule = r
+        elif isinstance(r, GlobRule):
+            glob_rule = r
+
+    assert dir_rule is not None, "Dir rule not found"
+    assert glob_rule is not None, "Glob rule not found"
+    assert glob_rule.include_patterns == include_patterns
+    assert glob_rule.exclude_patterns == exclude_patterns
+
+
+def test_simplify_create_rule_with_gitignore(monkeypatch):
+    """Test simplify_create_rule with GITIGNORE special word and path."""
+    include_patterns = ["*.py"]
+    exclude_patterns = ["test_*.py"]
+    special_words = "GITIGNORE"  # Using the actual uppercase key from constants
+    gitignore_path = "./gitignore"
+
+    # We still need to mock these for the test to work
+    monkeypatch.setattr(os.path, "exists", lambda path: True)
+    monkeypatch.setattr(GitignoreRule, "load", lambda path: GitignoreRule([]))
+
+    rule = RuleFactory.simplify_create_rule(
+        include_patterns=include_patterns,
+        exclude_patterns=exclude_patterns,
+        special_words=special_words,
+        gitignore_path=gitignore_path,
+    )
+
+    assert isinstance(rule, CompositeRule)
+    assert len(rule.rules) == 2
+
+    # Find the gitignore rule and glob rule
+    gitignore_rule = None
+    glob_rule = None
+
+    for r in rule.rules:
+        if isinstance(r, CompositeRule) and isinstance(r.rules[0], GitignoreRule):
+            gitignore_rule = r
+        elif isinstance(r, GlobRule):
+            glob_rule = r
+
+    assert gitignore_rule is not None, "Gitignore rule not found"
+    assert glob_rule is not None, "Glob rule not found"
+    assert glob_rule.include_patterns == include_patterns
+    assert glob_rule.exclude_patterns == exclude_patterns

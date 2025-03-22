@@ -1,3 +1,4 @@
 from .dir import CONFUSING_DIRS
+from .reserved_word import SPECIAL_RULES_RESERVED_WORDS
 
-__all__ = ["CONFUSING_DIRS"]
+__all__ = ["CONFUSING_DIRS", "SPECIAL_RULES_RESERVED_WORDS"]

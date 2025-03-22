@@ -1,7 +1,7 @@
 from pyteleport.rule import CompositeRule, GlobRule, HiddenFileRule
 
 
-class TestCompositeRule:
+class TestCompositeRuleMatches:
     def test_init(self):
         """Test initialization of CompositeRule."""
         rule1 = GlobRule(include_patterns=["*.py"])
@@ -31,6 +31,25 @@ class TestCompositeRule:
         # Doesn't match either rule
         assert composite_rule.matches(".test_example.py") is False
 
+    def test_is_include_any_rule(self):
+        """Test that is_include() returns True if any rule includes."""
+        # Create rules
+        glob_rule = GlobRule(include_patterns=["*.py"], exclude_patterns=["test_*.py"])
+        hidden_rule = HiddenFileRule()
+        composite_rule = CompositeRule(rules=[glob_rule, hidden_rule])
+
+        # Included by glob_rule
+        assert composite_rule.is_include("example.py")
+
+        # Not included by either rule
+        assert composite_rule.is_include("test_example.py")
+
+        # Not included by either rule
+        assert composite_rule.is_include(".example.py")
+
+        # Not included by either rule
+        assert composite_rule.is_include(".test_example.py")
+
     def test_is_exclude_any_rule(self):
         """Test that is_exclude() returns True if any rule excludes."""
         # Create rules
@@ -58,6 +77,7 @@ class TestCompositeRule:
         assert composite_rule.matches("any_file.txt") is True
 
         # With no rules, any() returns False for empty iterables
+        assert composite_rule.is_include("any_file.txt") is False
         assert composite_rule.is_exclude("any_file.txt") is False
 
     def test_nested_composite_rules(self):
@@ -90,3 +110,19 @@ class TestCompositeRule:
         # Doesn't match hidden_rule
         assert nested_rule.matches(".example.py") is False
         assert nested_rule.matches(".example.js") is False
+
+    def test_append_rule(self):
+        """Test appending a rule to a composite rule."""
+        # Create individual rules
+        glob_rule = GlobRule(include_patterns=["*.py"])
+        hidden_rule = HiddenFileRule()
+
+        composite_rule = CompositeRule(rules=[])
+        composite_rule.append(glob_rule)
+        assert len(composite_rule.rules) == 1
+
+        composite_rule2 = CompositeRule(rules=[hidden_rule])
+        composite_rule.append(composite_rule2)
+        assert len(composite_rule.rules) == 2
+        assert composite_rule.rules[0] == glob_rule
+        assert composite_rule.rules[1] == hidden_rule

@@ -1,7 +1,9 @@
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Union
 
+from pyteleport.constant import SPECIAL_RULES_RESERVED_WORDS
 from pyteleport.rule import (
+    BaseRule,
     CompositeRule,
     DirRule,
     GitignoreRule,
@@ -12,14 +14,62 @@ from pyteleport.rule import (
 
 class RuleFactory:
     @staticmethod
-    def create_rule(rule_type: str, **kwargs) -> CompositeRule:
+    def simplify_create_rule(
+        include_patterns: List[str] = None,
+        exclude_patterns: List[str] = None,
+        special_words: str | List[str] | None = None,
+        **kwargs,
+    ) -> CompositeRule:
+        rule_configs = []
+        if special_words is None:
+            special_words = []
+        elif isinstance(special_words, str):
+            special_words = [special_words]
+        for special_word in special_words:
+            if special_word in SPECIAL_RULES_RESERVED_WORDS.keys():
+                if kwargs.get("gitignore_path") and special_word == "GITIGNORE":
+                    rule_configs.append(
+                        {
+                            "type": SPECIAL_RULES_RESERVED_WORDS[special_word],
+                            "gitignore_path": kwargs.get("gitignore_path"),
+                        }
+                    )
+                else:  # hidden_file or dir
+                    rule_configs.append(
+                        {
+                            "type": SPECIAL_RULES_RESERVED_WORDS[special_word],
+                        }
+                    )
+
+        rule_configs.append(
+            {
+                "type": "glob",
+                "include_patterns": include_patterns,
+                "exclude_patterns": exclude_patterns,
+            }
+        )
+        return RuleFactory.create_composite_rule(rule_configs)
+
+    @staticmethod
+    def create_rule(rule_type: str, **kwargs) -> Union[BaseRule, CompositeRule]:
+        """
+        Create a rule based on the specified rule type and parameters.
+
+        Args:
+            rule_type: The type of rule to create ('glob', 'gitignore', 'hidden_file', 'dir', 'composite')
+            **kwargs: Additional parameters specific to the rule type
+
+        Returns:
+            The created rule
+
+        Raises:
+            ValueError: If the rule type is invalid or required parameters are missing
+        """
         if rule_type == "glob":
-            rule = GlobRule(
-                include_patterns=kwargs.get("include_patterns"),
-                exclude_patterns=kwargs.get("exclude_patterns"),
+            return GlobRule(
+                include_patterns=kwargs.get("include_patterns", []),
+                exclude_patterns=kwargs.get("exclude_patterns", []),
             )
-            return rule
-            # return CompositeRule(rules=[rule])
         elif rule_type == "gitignore":
             if "gitignore_path" not in kwargs:
                 if os.path.exists("./.gitignore"):
@@ -42,8 +92,8 @@ class RuleFactory:
             rules = []
             for rule_config in rules_config:
                 config_copy = rule_config.copy()
-                rule_type = config_copy.pop("type")
-                rules.append(RuleFactory.create_rule(rule_type, **config_copy))
+                config_rule_type = config_copy.pop("type")
+                rules.append(RuleFactory.create_rule(config_rule_type, **config_copy))
             return CompositeRule(rules=rules)
 
         else:

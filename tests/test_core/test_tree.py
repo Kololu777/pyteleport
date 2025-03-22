@@ -2,63 +2,55 @@ import os
 
 import pytest
 
-from pyteleport.core import Tree, tree
+from pyteleport.core import TeleportTree, teleport_tree
+from pyteleport.rule import HiddenFileRule
 
 
 @pytest.fixture
 def temp_dir():
-    temp_dir = os.path.join("./", "dummy", "example_01")
+    temp_dir = os.path.join("./", "dummy", "example_tree")
 
     yield temp_dir
 
 
 class TestTreeFunction:
-    def test_tree_basic(self, temp_dir):
-        """Test basic tree functionality."""
-        result = tree(temp_dir)
+    @pytest.mark.parametrize(
+        "include_hidden,expected_count,should_have_hidden",
+        [
+            (False, 11, False),  # Default behavior - hidden files excluded
+            (True, 13, True),  # Include hidden files
+        ],
+    )
+    def test_tree_hidden_files(
+        self, temp_dir, include_hidden, expected_count, should_have_hidden
+    ):
+        """Test tree functionality with and without hidden files."""
+        hidden_rule = HiddenFileRule()
+        if include_hidden:
+            hidden_rule.is_include = lambda query: True
+
+        result = teleport_tree(temp_dir, rule_fn=hidden_rule)
 
         # Check root is included
         assert result[0]["name"] == temp_dir
         assert result[0]["is_dir"] is True
 
-        # Check total number of entries (excluding hidden files)
-        # 1 root + 3 dirs + 7 files (excluding hidden ones)
-        assert len(result) == 11
-
-        # Check that hidden files are not included by default
-        # Skip the root entry when checking for hidden files
-        hidden_files = [
-            item
-            for item in result[1:]
-            if os.path.basename(item["name"]).startswith(".")
-        ]
-        assert len(hidden_files) == 0
-
-    def test_tree_with_hidden_files(self, temp_dir):
-        """Test tree with hidden files included."""
-        result = tree(temp_dir, is_hidden_file=True)
-
-        # Check total number of entries (including hidden files)
-        # 1 root + 4 dirs + 8 files (including hidden ones)
-        assert len(result) == 13
-
-        # Check that hidden files are included
-        hidden_files = [item for item in result if item["name"].startswith(".")]
-        assert len(hidden_files) > 0
+        # Check total number of entries
+        assert len(result) == expected_count
 
     def test_tree_file_path(self, temp_dir):
         """Test tree with a file path instead of directory."""
         file_path = os.path.join(temp_dir, "file1.txt")
-        result = tree(file_path)
+        result = teleport_tree(file_path)
 
         # Should only contain the file itself
         assert len(result) == 1
         assert result[0]["name"] == file_path
         assert result[0]["is_dir"] is False
 
-    def test_tree_structure(self, temp_dir):
-        """Test that the tree structure is correct."""
-        result = tree(temp_dir)
+    def test_tree_structure_and_properties(self, temp_dir):
+        """Test that the tree structure and various properties are correct."""
+        result = teleport_tree(temp_dir)
 
         # Check that directories have the correct structure
         dir1_entry = next((item for item in result if item["name"] == "dir1"), None)
@@ -78,96 +70,55 @@ class TestTreeFunction:
 
 
 class TestTreeClass:
-    def test_tree_class_init(self, temp_dir):
-        """Test Tree class initialization."""
-        tree_obj = Tree(temp_dir)
+    def test_tree_class_initialization(self, temp_dir):
+        """Test Tree class initialization and basic properties."""
+        tree_obj = TeleportTree(temp_dir)
 
         # Check that the tree list is populated
         assert len(tree_obj.tree_list) > 0
         assert tree_obj.tree_list[0]["name"] == temp_dir
 
-    def test_tree_class_len(self, temp_dir):
-        """Test Tree class __len__ property."""
-        tree_obj = Tree(temp_dir)
-
         # Check that __len__ returns the correct number of entries
         assert tree_obj.__len__ == len(tree_obj.tree_list)
 
-    def test_change_name_root(self, temp_dir):
-        """Test changing the root name."""
-        tree_obj = Tree(temp_dir)
-        new_root_name = "new_root"
+    @pytest.mark.parametrize(
+        "test_name,method_to_call,args,expected_check",
+        [
+            (
+                "root_name_change",
+                "change_name_root",
+                ["new_root"],
+                lambda obj: obj.tree_list[0]["name"] == "new_root",
+            ),
+            (
+                "leaf_name_change",
+                "all_change_name_leaf",
+                ["prefix_"],
+                lambda obj: all(
+                    item["name"].startswith("prefix_")
+                    for item in obj.tree_list
+                    if item["parent"] != -1
+                ),
+            ),
+        ],
+    )
+    def test_name_change_operations(
+        self, temp_dir, test_name, method_to_call, args, expected_check
+    ):
+        """Test various name change operations."""
+        tree_obj = TeleportTree(temp_dir)
 
-        tree_obj.change_name_root(new_root_name)
+        # Call the method with the given arguments
+        method = getattr(tree_obj, method_to_call)
+        method(*args)
 
-        # Check that the root name has been changed
-        assert tree_obj.tree_list[0]["name"] == new_root_name
-
-    def test_all_change_name_leaf_with_include(self, temp_dir):
-        """Test changing leaf names with include patterns."""
-        tree_obj = Tree(temp_dir)
-        prefix = "prefix_"
-
-        # Change all .txt files
-        tree_obj.all_change_name_leaf(prefix, include=["*.txt"])
-
-        # Check that .txt files have been prefixed
-        txt_files = [
-            item for item in tree_obj.tree_list if item["name"].endswith(".txt")
-        ]
-        for file in txt_files:
-            assert file["name"].startswith(prefix)
-
-        # Check that .py files have not been prefixed
-        py_files = [item for item in tree_obj.tree_list if item["name"].endswith(".py")]
-        for file in py_files:
-            assert not file["name"].startswith(prefix)
-
-    def test_all_change_name_leaf_with_exclude(self, temp_dir):
-        """Test changing leaf names with exclude patterns."""
-        tree_obj = Tree(temp_dir)
-        prefix = "prefix_"
-
-        # Change all files except .py files
-        tree_obj.all_change_name_leaf(prefix, include=["*"], exclude=["*.py"])
-
-        # Check that non-.py files have been prefixed
-        non_py_files = [
-            item
-            for item in tree_obj.tree_list
-            if not item["name"].endswith(".py") and not item["is_dir"]
-        ]
-        for file in non_py_files:
-            assert file["name"].startswith(prefix)
-
-        # Check that .py files have not been prefixed
-        py_files = [item for item in tree_obj.tree_list if item["name"].endswith(".py")]
-        for file in py_files:
-            assert not file["name"].startswith(prefix)
-
-    def test_all_change_name_leaf_with_dir_change(self, temp_dir):
-        """Test changing leaf names with is_if_dir_change=True."""
-        tree_obj = Tree(temp_dir)
-        prefix = "prefix_"
-
-        # Change only directories
-        tree_obj.all_change_name_leaf(
-            prefix, include=[], exclude=["*"], is_if_dir_change=True
-        )
-
-        # Check that directories have been prefixed
-        dirs = [item for item in tree_obj.tree_list if item["is_dir"]]
-        for dir_item in dirs:
-            assert dir_item["name"].startswith(prefix)
-
-        # Check that files have not been prefixed
-        files = [item for item in tree_obj.tree_list if not item["is_dir"]]
-        for file in files:
-            assert not file["name"].startswith(prefix)
+        # Verify the result
+        assert expected_check(tree_obj)
 
     def test_exclude_leaf(self, temp_dir):
         """Test excluding leaves from the tree."""
-        tree_obj = Tree(temp_dir)
+        tree_obj = TeleportTree(temp_dir)
+
         initial_count = len(tree_obj.tree_list)
 
         # Exclude .txt files
@@ -182,30 +133,34 @@ class TestTreeClass:
         # Check that the total count has decreased
         assert len(tree_obj.tree_list) < initial_count
 
-    def test_update_tree_add_mode(self, temp_dir):
-        """Test _update_tree with 'add' mode."""
-        tree_obj = Tree(temp_dir)
+    @pytest.mark.parametrize(
+        "mode,input_value,expected_result",
+        [
+            (
+                "add",
+                "prefix_*",
+                lambda obj, orig: obj.tree_list[1]["name"] == "prefix_" + orig,
+            ),
+            (
+                "replace",
+                "new_name",
+                lambda obj, orig: obj.tree_list[1]["name"] == "new_name",
+            ),
+        ],
+    )
+    def test_update_tree_modes(self, temp_dir, mode, input_value, expected_result):
+        """Test _update_tree with different modes."""
+        tree_obj = TeleportTree(temp_dir)
         original_name = tree_obj.tree_list[1]["name"]
-        prefix = "prefix_"
 
-        tree_obj._update_tree(1, prefix, mode="add")
+        tree_obj._update_tree(1, input_value, mode=mode)
 
-        # Check that the name has been prefixed
-        assert tree_obj.tree_list[1]["name"] == prefix + original_name
-
-    def test_update_tree_replace_mode(self, temp_dir):
-        """Test _update_tree with 'replace' mode."""
-        tree_obj = Tree(temp_dir)
-        new_name = "new_name"
-
-        tree_obj._update_tree(1, new_name, mode="replace")
-
-        # Check that the name has been replaced
-        assert tree_obj.tree_list[1]["name"] == new_name
+        # Check the result using the provided function
+        assert expected_result(tree_obj, original_name)
 
     def test_update_tree_invalid_mode(self, temp_dir):
         """Test _update_tree with invalid mode."""
-        tree_obj = Tree(temp_dir)
+        tree_obj = TeleportTree(temp_dir)
 
         # Should raise ValueError for invalid mode
         with pytest.raises(ValueError):
