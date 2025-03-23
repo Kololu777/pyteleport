@@ -84,7 +84,7 @@ class RuleFactory:
 
         elif rule_type == "dir":
             return CompositeRule(rules=[DirRule()])
-
+        
         elif rule_type == "composite":
             if "rules" not in kwargs:
                 raise ValueError("rules is required for composite rule")
@@ -95,7 +95,6 @@ class RuleFactory:
                 config_rule_type = config_copy.pop("type")
                 rules.append(RuleFactory.create_rule(config_rule_type, **config_copy))
             return CompositeRule(rules=rules)
-
         else:
             raise ValueError(f"Invalid rule type: {rule_type}")
 

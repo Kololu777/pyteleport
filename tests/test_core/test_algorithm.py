@@ -1,6 +1,6 @@
 import pytest
 
-from src.pyteleport.core.algorithm import apply_asterisk_rule
+from pyteleport.core.algorithm import apply_asterisk_rule
 
 
 # Parametrized test to test multiple cases at once

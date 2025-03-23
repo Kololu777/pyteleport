@@ -6,7 +6,7 @@ from rich import print
 from pyteleport.core.algorithm import apply_asterisk_rule
 from pyteleport.rule import CompositeRule
 from pyteleport.rule.rule_factory import RuleFactory
-
+from pyteleport.core._singlefile import _SingleFile
 
 def teleport_tree(
     path: str,
@@ -79,7 +79,7 @@ class TeleportTree:
         include_patterns: list[str] = None,
         exclude_patterns: list[str] = None,
         special_words: list[str] = None,
-        gitignore_path: str = "./gitignore",
+        gitignore_path: str = "./.gitignore",
     ):
         self._path = self._first_path = path
         self.rule_fn = RuleFactory.simplify_create_rule(
@@ -88,6 +88,9 @@ class TeleportTree:
             special_words,
             gitignore_path=gitignore_path,
         )
+        print(self.rule_fn.rules[0].matches("test_rule.py"))
+        print(self.rule_fn.rules[0].matches("test_rule.pyc"))
+
         self._tree_list = teleport_tree(path, self.rule_fn)
 
     @property
@@ -166,6 +169,13 @@ class TeleportTree:
 
     def add_binary_info(self) -> None:
         self._tree_list = self._judge_binary_file()
+
+    def to_single_file(self, 
+                    template: str | None = None, 
+                       output_path: str | None = None,
+                       is_lineno: bool = False) -> None:
+        single_file = _SingleFile(self, template, output_path)
+        single_file.to_single_file(is_lineno)
 
     def exclude_leaf(self, exclude_patterns: list[str]) -> None:
         """

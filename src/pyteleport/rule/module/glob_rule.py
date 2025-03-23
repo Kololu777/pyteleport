@@ -34,7 +34,7 @@ class GlobRule(BaseRule):
         # Therefore, for basic usage, specifying `include_patterns` is not required.
 
         self.include_patterns = (
-            include_patterns if include_patterns is not None else [".*"]
+            include_patterns if include_patterns is not None else ["*"]
         )
         # default exclude_patterns is []. exclude-target nothing.
         self.exclude_patterns = exclude_patterns if exclude_patterns is not None else []
