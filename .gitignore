@@ -7,7 +7,8 @@ __pycache__*
 .pytest_cache
 .venv
 .vscode
-  
+htmlcov
+
 # Private Dataset
 mini_docs
 mini_scripts
