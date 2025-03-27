@@ -1,9 +1,7 @@
-# Avoid circular import by using TYPE_CHECKING
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Protocol, Optional
 from pyteleport.constant import LINENO_PADDING_WIDTH
-if TYPE_CHECKING:
-    from pyteleport.core.tree import TeleportTree
-
+from pathlib import Path
+import re
 
 class TreeProtocol(Protocol):
     """Protocol defining the interface required from TeleportTree."""
@@ -14,25 +12,25 @@ class TreeProtocol(Protocol):
 class _SingleFile:
     def __init__(
         self,
-        tree_instance: "TreeProtocol",  # Use forward reference with Protocol
-        template: str | None = None,
+        tree_instance: Optional["TreeProtocol"] = None,  # Use forward reference with Protocol
+        template_symbol_and_length: tuple[str, int] | None  = None,
         output_path: str | None = None,
     ):
-        self._tree = tree_instance
-        self._tree.add_binary_info()
-        if template is None:
-            self._template = "%" * 10 + "\n"
-            self._template += "file: {file_name}\n"
-            self._template += "%" * 10 + "\n"
-        else:
-            if "{file_name}" not in template:
-                raise ValueError("template must contain {file_name}")
-            self._template = template
+        if tree_instance is not None:
+            # need to `to_single_file` method.
+            self._tree = tree_instance
+            self._tree.add_binary_info()
 
-        if output_path is None:
-            self._output_path = "onefile.txt"
+        if template_symbol_and_length is None:
+            template_symbols = "%" * 10 + "\n"
         else:
-            self._output_path = output_path
+            template_symbols = template_symbol_and_length[0] * template_symbol_and_length[1] + "\n"
+        self._template = template_symbols
+        self._template += "file: {file_name}\n"
+        self._template += template_symbols
+      
+        self._pattern = template_symbols + "file: (.*?)\n"  + template_symbols
+        self._output_path = "onefile.txt" if output_path is None else output_path
 
     def _get_template(self, file_name: str) -> str:
         return self._template.format(file_name=file_name)
@@ -55,61 +53,57 @@ class _SingleFile:
                 onefile_text += "\n"
         with open(self._output_path, "w") as f:
             f.write(onefile_text)
-
-    def parse(self, onefile_text: str) -> None:
+    
+    def _remove_line_numbers(self, content: str) -> str:
         """
-        Parse a single file containing multiple files and return a list of files.
+        Remove line numbers from the content if they exist.
         
         Args:
-            onefile_text: The text of the single file to parse.
+            content: The content that might contain line numbers
             
         Returns:
-            None
+            str: Content with line numbers removed
         """
-        # Split the text by the template pattern
-        template_prefix = "%" * 10
-        files = []
-        current_file = None
-        current_content = []
-        is_lineno = False
+        lines = content.splitlines()
+        cleaned_lines = []
         
-        lines = onefile_text.splitlines()
-        i = 0
-        while i < len(lines):
-            line = lines[i]
-            
-            # Check if this is a template header
-            if line.startswith(template_prefix) and i + 2 < len(lines) and lines[i+2].startswith(template_prefix):
-                # If we have a current file, save it
-                if current_file is not None:
-                    content = "\n".join(current_content)
-                    files.append({"file": current_file, "content": content})
-                    current_content = []
-                
-                # Extract the file name
-                file_line = lines[i+1]
-                if file_line.startswith("file: "):
-                    current_file = file_line[6:].strip()
-                    i += 3  # Skip the template lines
-                    continue
-            
-            # Check if this line has line numbers (e.g., "0:      import os")
-            if ":" in line and line.split(":", 1)[0].strip().isdigit():
-                is_lineno = True
-                # Extract the content after the line number
-                content_part = line.split(":", 1)[1]
-                if content_part.startswith(" " * LINENO_PADDING_WIDTH):
-                    content_part = content_part[LINENO_PADDING_WIDTH:]
-                current_content.append(content_part)
+        for line in lines:
+            # Check if line starts with a number followed by colon
+            if re.match(r'^\d+:', line):
+                cleaned_line = line[LINENO_PADDING_WIDTH+1:]
+                cleaned_lines.append(cleaned_line)
             else:
-                # Regular line without line numbers
-                current_content.append(line)
+                cleaned_lines.append(line)
+        return '\n'.join(cleaned_lines)
+
+    def parse(self, onefile_txt_path: str | Path) -> None:
+        """
+        Parse a single file containing multiple files and return file names and their contents.
+        
+        Args:
+            onefile_txt_path: Path to the onefile.txt to parse
             
-            i += 1
+        Returns:
+            tuple: (list of file names, list of code blocks)
+        """
+        with open(onefile_txt_path, "r") as f:
+            onefile_text = f.read()
         
-        # Don't forget the last file
-        if current_file is not None:
-            content = "\n".join(current_content)
-            files.append({"file": current_file, "content": content})
+        # Pattern to match the file header and content
+        pattern = f"{self._pattern}(.*?)(?={self._pattern}|\Z)"
         
-        return files
+        # Find all matches
+        matches = re.finditer(pattern, onefile_text, re.DOTALL)
+        
+        # Extract file names and contents
+        files = []
+        contents = []
+        for match in matches:
+            file_name = match.group(1).strip()
+            content = match.group(2).strip()
+            # Remove line numbers from content
+            content = self._remove_line_numbers(content)
+            files.append(file_name)
+            contents.append(content)
+        
+        return files, contents

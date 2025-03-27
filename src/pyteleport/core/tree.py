@@ -172,8 +172,8 @@ class TeleportTree:
 
     def to_single_file(self, 
                     template: str | None = None, 
-                       output_path: str | None = None,
-                       is_lineno: bool = False) -> None:
+                    output_path: str | None = None,
+                    is_lineno: bool = False) -> None:
         single_file = _SingleFile(self, template, output_path)
         single_file.to_single_file(is_lineno)
 
@@ -201,53 +201,3 @@ class TeleportTree:
                     new_tree_list.append(item)
 
         self._tree_list = new_tree_list
-
-
-if __name__ == "__main__":
-    from pyteleport.rule import RuleFactory
-
-    rule = RuleFactory._create_rule(
-        "glob",
-        exclude_patterns=[
-            "*.pyc",
-            "__pycache__",
-            "*/__pycache__/**",
-            "*/__pycache__/**/*",
-        ],
-    )
-    t = TeleportTree("./src/pyteleport/rule/", rule_fn=rule)
-    t.change_name_root("./tests/test_rule/")
-    t.all_change_name_leaf(change_rule="test_*")
-    t.print
-    """
-    from pyteleport.rule import RuleFactory
-
-    config = [
-        {
-            "type": "glob",
-            # "include_patterns": ["*.py"],
-            "exclude_patterns": [
-                "*.egg-info",
-                "*.pyc",
-                "__pycache__/**",
-                "*__pycache__*",
-                "**/__pycache__/**",
-            ],
-        },
-        {"type": "hidden_file"},
-    ]
-    rule_fn = RuleFactory.create_composite_rule(config)
-
-    # rule_fn = RuleFactory.create_rule("glob", include_patterns=["pyteleport/**"])
-    #tree = Tree("./src/", rule_fn=rule_fn)
-    tree = Tree("./src")
-    tree.print
-    tree.change_name_root("./tests")
-    tree.all_change_name_leaf(change_rule="test_*")
-    tree.print
-
-    print(tree._tree_list)
-
-    tree.add_binary_info()
-    print(tree._tree_list)
-    """
