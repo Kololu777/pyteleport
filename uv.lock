@@ -180,6 +180,7 @@ dependencies = [
     { name = "binaryornot" },
     { name = "pathspec" },
     { name = "rich" },
+    { name = "whatthepatch" },
 ]
 
 [package.dev-dependencies]
@@ -187,6 +188,7 @@ dev = [
     { name = "coverage" },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "python-patch" },
     { name = "ruff" },
 ]
 
@@ -196,6 +198,7 @@ requires-dist = [
     { name = "pathspec", specifier = ">=0.12.1" },
     { name = "pyteleport", virtual = "." },
     { name = "rich", specifier = ">=13.9.4" },
+    { name = "whatthepatch", specifier = ">=1.0.7" },
 ]
 
 [package.metadata.requires-dev]
@@ -203,6 +206,7 @@ dev = [
     { name = "coverage", specifier = ">=7.7.1" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
+    { name = "python-patch", specifier = ">=0.0.1" },
     { name = "ruff", specifier = ">=0.9.10" },
 ]
 
@@ -234,6 +238,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/be/45/9b538de8cef30e17c7b45ef42f538a94889ed6a16f2387a6c89e73220651/pytest-cov-6.0.0.tar.gz", hash = "sha256:fde0b595ca248bb8e2d76f020b465f3b107c9632e6a1d1705f17834c89dcadc0", size = 66945 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/36/3b/48e79f2cd6a61dbbd4807b4ed46cb564b4fd50a76166b1c4ea5c1d9e2371/pytest_cov-6.0.0-py3-none-any.whl", hash = "sha256:eee6f1b9e61008bd34975a4d5bab25801eb31898b032dd55addc93e96fcaaa35", size = 22949 },
+]
+
+[[package]]
+name = "python-patch"
+version = "0.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7f/1a/96926114b12e7893b21b656d152b325f312d99ea8e1fc8f63cd0f2c503e1/python-patch-0.0.1.tar.gz", hash = "sha256:9414665913076cbe7fdfcdaf9c208a9617cd38125c33d9404f29fa0693f0089e", size = 1526 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6b/3c/6b4102384f950509230568853314a7bf9eb48e16201f7e6f9b24d6c67181/python_patch-0.0.1-py3-none-any.whl", hash = "sha256:42b499f609943b9cc91e4c05432b13212d744ca5ea7a4ab6c040299e572bf49e", size = 1911 },
 ]
 
 [[package]]
@@ -321,4 +334,13 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/df/db/f35a00659bc03fec321ba8bce9420de607a1d37f8342eee1863174c69557/typing_extensions-4.12.2.tar.gz", hash = "sha256:1a7ead55c7e559dd4dee8856e3a88b41225abfe1ce8df57b7c13915fe121ffb8", size = 85321 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/26/9f/ad63fc0248c5379346306f8668cda6e2e2e9c95e01216d2b8ffd9ff037d0/typing_extensions-4.12.2-py3-none-any.whl", hash = "sha256:04e5ca0351e0f3f85c6853954072df659d0d13fac324d0072316b67d7794700d", size = 37438 },
+]
+
+[[package]]
+name = "whatthepatch"
+version = "1.0.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/06/28/55bc3e107a56fdcf7d5022cb32b8c21d98a9cc2df5cd9f3b93e10419099e/whatthepatch-1.0.7.tar.gz", hash = "sha256:9eefb4ebea5200408e02d413d2b4bc28daea6b78bb4b4d53431af7245f7d7edf", size = 34612 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8e/93/af1d6ccb69ab6b5a00e03fa0cefa563f9862412667776ea15dd4eece3a90/whatthepatch-1.0.7-py3-none-any.whl", hash = "sha256:1b6f655fd31091c001c209529dfaabbabdbad438f5de14e3951266ea0fc6e7ed", size = 11964 },
 ]

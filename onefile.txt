@@ -1,0 +1,1677 @@
+%%%%%%%%%%
+file: ./src/pyteleport/core/algorithm.py
+%%%%%%%%%%
+0:      def apply_asterisk_rule(name: str, rule: str) -> str:
+1:          """
+2:          Apply the rule to the name.
+3:      
+4:          Args:
+5:              name: The name of the file or directory.
+6:              rule: The rule to change the name.
+7:          Returns:
+8:              The changed name.
+9:          Examples:
+10:             >>> apply_asterisk_rule("a.py", "test_*")
+11:             "test_a.py"
+12:         """
+13:         if "*" in rule:
+14:             return rule.replace("*", name)
+15:         return rule
+
+%%%%%%%%%%
+file: ./src/pyteleport/core/tree.py
+%%%%%%%%%%
+0:      import os
+1:      
+2:      from binaryornot.check import is_binary
+3:      from rich import print
+4:      
+5:      from pyteleport.core.algorithm import apply_asterisk_rule
+6:      from pyteleport.rule import CompositeRule
+7:      from pyteleport.rule.rule_factory import RuleFactory
+8:      from pyteleport.core._singlefile import _SingleFile
+9:      
+10:     def teleport_tree(
+11:         path: str,
+12:         rule_fn: CompositeRule | None = None,
+13:         _prefix: str = "",
+14:         _visited_list: list[str] | None = None,
+15:     ):
+16:         """
+17:         Get tree structure of the path. like `tree` command.
+18:     
+19:         Args:
+20:             path: start path
+21:             rule_fn: rule function
+22:         Returns:
+23:             list: tree structure of the path.
+24:     
+25:         Examples:
+26:             >>> from pyteleport import tree
+27:             >>> tree("./src", rule_fn=HiddenFileRule())
+28:         """
+29:         # Init visited list.
+30:         if _visited_list is None:
+31:             _visited_list = []
+32:     
+33:         if _prefix == "":
+34:             # add root info to visited list ad dict
+35:             visited_dict = {
+36:                 "symbol": "",
+37:                 "name": path,
+38:                 "path": path,
+39:                 "parent": -1,  # -1 means root
+40:                 "children": [],
+41:                 "is_dir": os.path.isdir(path),
+42:             }
+43:             _visited_list.append(visited_dict)
+44:     
+45:             if not _visited_list[0]["is_dir"]:  # If init path is file, return
+46:                 return _visited_list
+47:     
+48:         entries = os.listdir(path)
+49:         if rule_fn is not None:
+50:             entries = [entry for entry in entries if rule_fn.matches(entry)]
+51:         entries_count = len(entries)
+52:     
+53:         parent_idx = len(_visited_list) - 1
+54:     
+55:         for idx, entry in enumerate(entries):
+56:             full_path = os.path.join(path, entry)
+57:             connector = "└── " if idx == entries_count - 1 else "├── "
+58:             visited_dict = {
+59:                 "symbol": f"{_prefix}{connector}",
+60:                 "name": entry,
+61:                 "path": full_path,
+62:                 "parent": parent_idx,
+63:                 "children": [],
+64:                 "is_dir": os.path.isdir(full_path),
+65:             }
+66:             _visited_list.append(visited_dict)
+67:             _visited_list[parent_idx]["children"].append(len(_visited_list) - 1)
+68:             if os.path.isdir(full_path):
+69:                 next_prefix = _prefix + ("    " if idx == entries_count - 1 else "│   ")
+70:                 teleport_tree(full_path, rule_fn, next_prefix, _visited_list)
+71:         return _visited_list
+72:     
+73:     
+74:     class TeleportTree:
+75:         def __init__(
+76:             self,
+77:             path: str,
+78:             include_patterns: list[str] = None,
+79:             exclude_patterns: list[str] = None,
+80:             special_words: list[str] = None,
+81:             gitignore_path: str = "./.gitignore",
+82:         ):
+83:             self._path = self._first_path = path
+84:             self.rule_fn = RuleFactory.simplify_create_rule(
+85:                 include_patterns,
+86:                 exclude_patterns,
+87:                 special_words,
+88:                 gitignore_path=gitignore_path,
+89:             )
+90:             print(self.rule_fn.rules[0].matches("test_rule.py"))
+91:             print(self.rule_fn.rules[0].matches("test_rule.pyc"))
+92:     
+93:             self._tree_list = teleport_tree(path, self.rule_fn)
+94:     
+95:         @property
+96:         def tree_list(self) -> list[str]:
+97:             return self._tree_list
+98:     
+99:         @property
+100:        def __len__(self) -> int:
+101:            return len(self._tree_list)
+102:    
+103:        @property
+104:        def print(self) -> None:
+105:            for tree_dict in self._tree_list:
+106:                if tree_dict["is_dir"]:
+107:                    print(f"{tree_dict['symbol']}[magenta]{tree_dict['name']}[/magenta]")
+108:                else:
+109:                    print(f"{tree_dict['symbol']}[cyan]{tree_dict['name']}[/cyan]")
+110:    
+111:        def change_name_root(self, change_root_name: str) -> None:
+112:            self._path = change_root_name
+113:            self._update_tree(0, change_root_name, mode="replace")
+114:            self._tree_list[0]["path"] = self._path
+115:    
+116:        def all_change_name_leaf(
+117:            self,
+118:            change_rule: str,
+119:        ) -> None:
+120:            """
+121:            Args:
+122:                change_rule: Change rule. (a.py, change_rule=test_*) -> test_a.py, (b_*a_c.py, change_rule=test_*) -> test_b_a_c.py
+123:            """
+124:            if len(self._tree_list) <= 1:
+125:                return
+126:    
+127:            for idx, tree_dict in enumerate(self._tree_list):
+128:                if idx == 0 and tree_dict["is_dir"]:
+129:                    continue
+130:                else:
+131:                    self._update_tree(idx, change_rule, mode="add")
+132:            self._update_path()
+133:    
+134:        def _update_tree(
+135:            self, idx: int, update_name_or_rule: str, mode: str = "add"
+136:        ) -> None:
+137:            if mode == "add":
+138:                update_name = apply_asterisk_rule(
+139:                    self._tree_list[idx]["name"], update_name_or_rule
+140:                )
+141:            elif mode == "replace":
+142:                update_name = update_name_or_rule
+143:            else:
+144:                raise ValueError(f"Invalid mode: {mode}")
+145:            self._tree_list[idx]["name"] = update_name
+146:    
+147:        def _update_path(self):
+148:            # note: this method is able to use when `name` update already completed.
+149:            def _update_path_recursive(idx: int):
+150:                children_idx = self._tree_list[idx]["children"]
+151:                for child_idx in children_idx:
+152:                    self._tree_list[child_idx]["path"] = os.path.join(
+153:                        self._tree_list[idx]["path"], self._tree_list[child_idx]["name"]
+154:                    )
+155:                    _update_path_recursive(child_idx)
+156:    
+157:            _update_path_recursive(0)
+158:    
+159:        def _judge_binary_file(self) -> bool:
+160:            for tree_dict in self._tree_list:
+161:                if tree_dict["is_dir"]:
+162:                    tree_dict["is_binary"] = "dir"
+163:                elif is_binary(tree_dict["path"]):
+164:                    tree_dict["is_binary"] = "binary"
+165:                else:
+166:                    tree_dict["is_binary"] = "text"
+167:            return self._tree_list
+168:    
+169:        def add_binary_info(self) -> None:
+170:            self._tree_list = self._judge_binary_file()
+171:    
+172:        def to_single_file(self, 
+173:                        template: str | None = None, 
+174:                           output_path: str | None = None,
+175:                           is_lineno: bool = False) -> None:
+176:            single_file = _SingleFile(self, template, output_path)
+177:            single_file.to_single_file(is_lineno)
+178:    
+179:        def exclude_leaf(self, exclude_patterns: list[str]) -> None:
+180:            """
+181:            Exclude leaves from the tree that match the given patterns.
+182:    
+183:            Args:
+184:                exclude_patterns: List of glob patterns to exclude
+185:            """
+186:            if not exclude_patterns:
+187:                return
+188:    
+189:            from fnmatch import fnmatch
+190:    
+191:            # Create a new tree_list excluding matching files
+192:            new_tree_list = []
+193:            for item in self._tree_list:
+194:                # Keep directories and files that don't match any exclude pattern
+195:                if item["is_dir"]:
+196:                    new_tree_list.append(item)
+197:                else:
+198:                    filename = os.path.basename(item["path"])
+199:                    if not any(fnmatch(filename, pattern) for pattern in exclude_patterns):
+200:                        new_tree_list.append(item)
+201:    
+202:            self._tree_list = new_tree_list
+203:    
+204:    
+205:    if __name__ == "__main__":
+206:        from pyteleport.rule import RuleFactory
+207:    
+208:        rule = RuleFactory._create_rule(
+209:            "glob",
+210:            exclude_patterns=[
+211:                "*.pyc",
+212:                "__pycache__",
+213:                "*/__pycache__/**",
+214:                "*/__pycache__/**/*",
+215:            ],
+216:        )
+217:        t = TeleportTree("./src/pyteleport/rule/", rule_fn=rule)
+218:        t.change_name_root("./tests/test_rule/")
+219:        t.all_change_name_leaf(change_rule="test_*")
+220:        t.print
+221:        """
+222:        from pyteleport.rule import RuleFactory
+223:    
+224:        config = [
+225:            {
+226:                "type": "glob",
+227:                # "include_patterns": ["*.py"],
+228:                "exclude_patterns": [
+229:                    "*.egg-info",
+230:                    "*.pyc",
+231:                    "__pycache__/**",
+232:                    "*__pycache__*",
+233:                    "**/__pycache__/**",
+234:                ],
+235:            },
+236:            {"type": "hidden_file"},
+237:        ]
+238:        rule_fn = RuleFactory.create_composite_rule(config)
+239:    
+240:        # rule_fn = RuleFactory.create_rule("glob", include_patterns=["pyteleport/**"])
+241:        #tree = Tree("./src/", rule_fn=rule_fn)
+242:        tree = Tree("./src")
+243:        tree.print
+244:        tree.change_name_root("./tests")
+245:        tree.all_change_name_leaf(change_rule="test_*")
+246:        tree.print
+247:    
+248:        print(tree._tree_list)
+249:    
+250:        tree.add_binary_info()
+251:        print(tree._tree_list)
+252:        """
+
+%%%%%%%%%%
+file: ./src/pyteleport/core/patch.py
+%%%%%%%%%%
+0:      import os
+1:      import subprocess
+2:      
+3:      class Patch:
+4:          def __init__(self, old_file: str, new_file: str):
+5:              self.old_file = old_file
+6:              self.new_file = new_file
+7:      
+8:          
+9:          def diff(self):
+10:             subprocess.run(['git', 'diff', '--no-index', self.old_file, self.new_file], check=True)
+11:     
+12:         def apply(self):
+13:             subprocess.run(['patch', self.old_file, self.new_file], check=True)
+14:     
+15:         
+16:         def remove(self):
+17:             os.remove(self.new_file)
+
+%%%%%%%%%%
+file: ./src/pyteleport/core/_singlefile.py
+%%%%%%%%%%
+0:      # Avoid circular import by using TYPE_CHECKING
+1:      from typing import TYPE_CHECKING, Any, Protocol
+2:      from pyteleport.constant import LINENO_PADDING_WIDTH
+3:      if TYPE_CHECKING:
+4:          from pyteleport.core.tree import TeleportTree
+5:      
+6:      
+7:      class TreeProtocol(Protocol):
+8:          """Protocol defining the interface required from TeleportTree."""
+9:          def add_binary_info(self) -> None: ...
+10:         _tree_list: list[dict]
+11:     
+12:     
+13:     class _SingleFile:
+14:         def __init__(
+15:             self,
+16:             tree_instance: "TreeProtocol",  # Use forward reference with Protocol
+17:             template: str | None = None,
+18:             output_path: str | None = None,
+19:         ):
+20:             self._tree = tree_instance
+21:             self._tree.add_binary_info()
+22:             if template is None:
+23:                 self._template = "%" * 10 + "\n"
+24:                 self._template += "file: {file_name}\n"
+25:                 self._template += "%" * 10 + "\n"
+26:             else:
+27:                 if "{file_name}" not in template:
+28:                     raise ValueError("template must contain {file_name}")
+29:                 self._template = template
+30:             
+31:             if output_path is None:
+32:                 self._output_path = "onefile.txt"
+33:             else:
+34:                 self._output_path = output_path
+35:             print(self._output_path)
+36:         def _get_template(self, file_name: str) -> str:
+37:             return self._template.format(file_name=file_name)
+38:     
+39:         def to_single_file(self, is_lineno: bool = False) -> None:
+40:             onefile_text = ""
+41:             for tree_dict in self._tree._tree_list:
+42:                 if tree_dict["is_binary"] == "text":
+43:                     with open(tree_dict["path"], "r") as f:
+44:                         text = f.read()
+45:                     onefile_text += self._get_template(tree_dict["path"])
+46:                     if is_lineno:
+47:                         lines = text.splitlines()
+48:                         for lineno, line in enumerate(lines):
+49:                             lineno_str = str(lineno)
+50:                             padding_width = LINENO_PADDING_WIDTH - len(lineno_str)
+51:                             onefile_text += f"{lineno_str}:{' ' * padding_width}{line}\n"
+52:                     else:
+53:                         onefile_text += text
+54:                     onefile_text += "\n"
+55:             with open(self._output_path, "w") as f:
+56:                 f.write(onefile_text)
+57:     
+58:         def parse(self, onefile_text: str) -> None:
+59:             """
+60:             Parse a single file containing multiple files and return a list of files.
+61:             
+62:             Args:
+63:                 onefile_text: The text of the single file to parse.
+64:                 
+65:             Returns:
+66:                 None
+67:             """
+68:             # Split the text by the template pattern
+69:             template_prefix = "%" * 10
+70:             files = []
+71:             current_file = None
+72:             current_content = []
+73:             is_lineno = False
+74:             
+75:             lines = onefile_text.splitlines()
+76:             i = 0
+77:             while i < len(lines):
+78:                 line = lines[i]
+79:                 
+80:                 # Check if this is a template header
+81:                 if line.startswith(template_prefix) and i + 2 < len(lines) and lines[i+2].startswith(template_prefix):
+82:                     # If we have a current file, save it
+83:                     if current_file is not None:
+84:                         content = "\n".join(current_content)
+85:                         files.append({"file": current_file, "content": content})
+86:                         current_content = []
+87:                     
+88:                     # Extract the file name
+89:                     file_line = lines[i+1]
+90:                     if file_line.startswith("file: "):
+91:                         current_file = file_line[6:].strip()
+92:                         i += 3  # Skip the template lines
+93:                         continue
+94:                 
+95:                 # Check if this line has line numbers (e.g., "0:      import os")
+96:                 if ":" in line and line.split(":", 1)[0].strip().isdigit():
+97:                     is_lineno = True
+98:                     # Extract the content after the line number
+99:                     content_part = line.split(":", 1)[1]
+100:                    if content_part.startswith(" " * LINENO_PADDING_WIDTH):
+101:                        content_part = content_part[LINENO_PADDING_WIDTH:]
+102:                    current_content.append(content_part)
+103:                else:
+104:                    # Regular line without line numbers
+105:                    current_content.append(line)
+106:                
+107:                i += 1
+108:            
+109:            # Don't forget the last file
+110:            if current_file is not None:
+111:                content = "\n".join(current_content)
+112:                files.append({"file": current_file, "content": content})
+113:            
+114:            return files
+
+%%%%%%%%%%
+file: ./src/pyteleport/cli/gitignore_stub.py
+%%%%%%%%%%
+0:      #!/usr/bin/env python
+1:      """
+2:      .gitignoreスタブジェネレーターのコマンドラインインターフェース
+3:      """
+4:      
+5:      import argparse
+6:      import os
+7:      import sys
+8:      from pathlib import Path
+9:      
+10:     from pyteleport.generator.gitignore_stub_generator import (
+11:         create_gitignore_file,
+12:         detect_project_type,
+13:     )
+14:     
+15:     
+16:     def main():
+17:         """
+18:         コマンドラインから.gitignoreスタブジェネレーターを実行するためのエントリーポイント
+19:         """
+20:         parser = argparse.ArgumentParser(
+21:             description=".gitignoreファイルのスタブを生成します。"
+22:         )
+23:         parser.add_argument(
+24:             "directory",
+25:             nargs="?",
+26:             default=".",
+27:             help="プロジェクトディレクトリのパス（デフォルト: カレントディレクトリ）",
+28:         )
+29:         parser.add_argument(
+30:             "--type",
+31:             "-t",
+32:             choices=["python", "node", "java", "general"],
+33:             help="プロジェクトタイプ（指定しない場合は自動検出）",
+34:         )
+35:         parser.add_argument(
+36:             "--custom", "-c", action="append", help="追加のカスタムルール（複数指定可）"
+37:         )
+38:         parser.add_argument(
+39:             "--force",
+40:             "-f",
+41:             action="store_true",
+42:             help="既存の.gitignoreファイルを上書きする",
+43:         )
+44:         parser.add_argument(
+45:             "--detect-only",
+46:             "-d",
+47:             action="store_true",
+48:             help="プロジェクトタイプを検出するだけで、ファイルは作成しない",
+49:         )
+50:     
+51:         args = parser.parse_args()
+52:         directory = Path(args.directory)
+53:     
+54:         # ディレクトリが存在するか確認
+55:         if not directory.exists():
+56:             print(f"エラー: ディレクトリが存在しません: {directory}")
+57:             sys.exit(1)
+58:         if not directory.is_dir():
+59:             print(f"エラー: 指定されたパスはディレクトリではありません: {directory}")
+60:             sys.exit(1)
+61:     
+62:         # プロジェクトタイプの検出のみ
+63:         if args.detect_only:
+64:             project_type = detect_project_type(directory)
+65:             print(f"検出されたプロジェクトタイプ: {project_type}")
+66:             sys.exit(0)
+67:     
+68:         # .gitignoreファイルの作成
+69:         success = create_gitignore_file(directory, args.type, args.custom, args.force)
+70:     
+71:         if success:
+72:             print(
+73:                 f".gitignoreファイルが作成されました: {os.path.join(args.directory, '.gitignore')}"
+74:             )
+75:         else:
+76:             print(
+77:                 f".gitignoreファイルは既に存在します: {os.path.join(args.directory, '.gitignore')}"
+78:             )
+79:             print("上書きするには --force オプションを使用してください。")
+80:     
+81:     
+82:     if __name__ == "__main__":
+83:         main()
+
+%%%%%%%%%%
+file: ./src/pyteleport/cli/stabdir.py
+%%%%%%%%%%
+0:      #!/usr/bin/env python
+1:      """
+2:      ディレクトリ構造生成ツールのコマンドラインインターフェース
+3:      """
+4:      
+5:      import sys
+6:      
+7:      from pyteleport.generator.generate_stab_dir import main
+8:      
+9:      if __name__ == "__main__":
+10:         sys.exit(main())
+
+%%%%%%%%%%
+file: ./src/pyteleport/generator/generate_stab_dir.py
+%%%%%%%%%%
+0:      import argparse
+1:      import json
+2:      from pathlib import Path
+3:      from typing import Any, Dict, Optional, Union
+4:      
+5:      # テンプレート定義
+6:      TEMPLATES = {
+7:          "basic": {
+8:              "directories": ["dir1/subdir1", "dir2", ".hidden_dir"],
+9:              "files": {
+10:                 "file1.txt": "test content",
+11:                 "file2.py": "print('hello')",
+12:                 ".hidden_file.txt": "hidden content",
+13:                 "dir1/file3.txt": "nested content",
+14:                 "dir1/file5.md": "nested markdown",
+15:                 "dir1/subdir1/file4.py": "nested python",
+16:                 "dir2/file5.md": "# markdown",
+17:                 "dir2/file6.md": "# markdown",
+18:             },
+19:         },
+20:         "python_project": {
+21:             "directories": ["src/mypackage", "tests", "docs", ".github/workflows"],
+22:             "files": {
+23:                 "README.md": "# My Python Project\n\nA sample Python project.",
+24:                 "pyproject.toml": '[project]\nname = "mypackage"\nversion = "0.1.0"\ndescription = "A sample Python project"\n',
+25:                 ".gitignore": "# Python\n__pycache__/\n*.py[cod]\n*$py.class\n.env\n.venv\nvenv/\nENV/\n",
+26:                 "src/mypackage/__init__.py": "# Package initialization\n",
+27:                 "src/mypackage/main.py": "def main():\n    print('Hello, world!')\n\nif __name__ == '__main__':\n    main()\n",
+28:                 "tests/__init__.py": "",
+29:                 "tests/test_main.py": "import unittest\nfrom mypackage.main import main\n\nclass TestMain(unittest.TestCase):\n    def test_main(self):\n        # Just a placeholder test\n        self.assertTrue(True)\n",
+30:                 ".github/workflows/python-test.yml": "name: Python Tests\non: [push, pull_request]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n    - uses: actions/checkout@v2\n    - name: Set up Python\n      uses: actions/setup-python@v2\n      with:\n        python-version: '3.10'\n    - name: Install dependencies\n      run: |\n        python -m pip install --upgrade pip\n        pip install pytest\n        pip install -e .\n    - name: Test with pytest\n      run: pytest\n",
+31:             },
+32:         },
+33:         "web_project": {
+34:             "directories": ["css", "js", "images", "fonts"],
+35:             "files": {
+36:                 "index.html": '<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>Web Project</title>\n    <link rel="stylesheet" href="css/style.css">\n</head>\n<body>\n    <h1>Hello, World!</h1>\n    <script src="js/main.js"></script>\n</body>\n</html>',
+37:                 "css/style.css": "body {\n    font-family: Arial, sans-serif;\n    margin: 0;\n    padding: 20px;\n    background-color: #f5f5f5;\n}\n\nh1 {\n    color: #333;\n}",
+38:                 "js/main.js": "document.addEventListener('DOMContentLoaded', function() {\n    console.log('Page loaded');\n});",
+39:             },
+40:         },
+41:         "node_project": {
+42:             "directories": ["src", "test", "dist"],
+43:             "files": {
+44:                 "package.json": '{\n  "name": "node-project",\n  "version": "1.0.0",\n  "description": "A sample Node.js project",\n  "main": "src/index.js",\n  "scripts": {\n    "test": "echo \\"Error: no test specified\\" && exit 1",\n    "start": "node src/index.js"\n  },\n  "keywords": [],\n  "author": "",\n  "license": "ISC"\n}',
+45:                 ".gitignore": "# Node.js\nnode_modules/\nnpm-debug.log\nyarn-error.log\n.env\ndist/\n",
+46:                 "src/index.js": "console.log('Hello, world!');\n",
+47:                 "README.md": "# Node.js Project\n\nA sample Node.js project.",
+48:             },
+49:         },
+50:     }
+51:     
+52:     
+53:     def generate_stab_dir(
+54:         target_dir: Union[str, Path],
+55:         template_name: str = "basic",
+56:         custom_structure: Optional[Dict[str, Any]] = None,
+57:         force: bool = False,
+58:     ) -> bool:
+59:         """
+60:         指定されたテンプレートに基づいてディレクトリ構造を生成します。
+61:     
+62:         Args:
+63:             target_dir: 生成先のディレクトリパス
+64:             template_name: 使用するテンプレート名
+65:             custom_structure: カスタム構造（指定した場合はテンプレートより優先）
+66:             force: 既存のファイルを上書きするかどうか
+67:     
+68:         Returns:
+69:             生成が成功したかどうか
+70:         """
+71:         target_dir = Path(target_dir)
+72:     
+73:         # ディレクトリが存在するか確認
+74:         if not target_dir.exists():
+75:             target_dir.mkdir(parents=True)
+76:         elif not target_dir.is_dir():
+77:             raise ValueError(f"{target_dir} はディレクトリではありません")
+78:     
+79:         # 空でないディレクトリの場合は確認
+80:         if not force and any(target_dir.iterdir()):
+81:             print(f"警告: ディレクトリ {target_dir} は空ではありません")
+82:             return False
+83:     
+84:         # 構造の取得
+85:         structure = custom_structure or TEMPLATES.get(template_name)
+86:         if not structure:
+87:             available_templates = ", ".join(TEMPLATES.keys())
+88:             raise ValueError(
+89:                 f"テンプレート '{template_name}' は存在しません。利用可能なテンプレート: {available_templates}"
+90:             )
+91:     
+92:         # ディレクトリの作成
+93:         for dir_path in structure.get("directories", []):
+94:             full_path = target_dir / dir_path
+95:             full_path.mkdir(parents=True, exist_ok=True)
+96:             print(f"ディレクトリを作成しました: {full_path}")
+97:     
+98:         # ファイルの作成
+99:         for file_path, content in structure.get("files", {}).items():
+100:            full_path = target_dir / file_path
+101:    
+102:            # 親ディレクトリが存在しない場合は作成
+103:            full_path.parent.mkdir(parents=True, exist_ok=True)
+104:    
+105:            # ファイルが存在し、forceがFalseの場合はスキップ
+106:            if not force and full_path.exists():
+107:                print(f"スキップ: ファイル {full_path} は既に存在します")
+108:                continue
+109:    
+110:            # ファイルの作成
+111:            with open(full_path, "w") as f:
+112:                f.write(content)
+113:            print(f"ファイルを作成しました: {full_path}")
+114:    
+115:        return True
+116:    
+117:    
+118:    def list_templates():
+119:        """利用可能なテンプレートの一覧と説明を表示します"""
+120:        print("利用可能なテンプレート:")
+121:        for name in TEMPLATES.keys():
+122:            dirs_count = len(TEMPLATES[name].get("directories", []))
+123:            files_count = len(TEMPLATES[name].get("files", {}))
+124:            print(
+125:                f"  - {name}: {dirs_count}個のディレクトリと{files_count}個のファイルを含むテンプレート"
+126:            )
+127:    
+128:    
+129:    def load_custom_structure(file_path: Union[str, Path]) -> Dict[str, Any]:
+130:        """
+131:        JSONファイルからカスタム構造を読み込みます。
+132:    
+133:        Args:
+134:            file_path: JSONファイルのパス
+135:    
+136:        Returns:
+137:            カスタム構造の辞書
+138:        """
+139:        with open(file_path, "r") as f:
+140:            return json.load(f)
+141:    
+142:    
+143:    def main():
+144:        """コマンドラインインターフェースのエントリーポイント"""
+145:        parser = argparse.ArgumentParser(
+146:            description="テスト用のディレクトリ構造を生成します。"
+147:        )
+148:        parser.add_argument(
+149:            "target_dir",
+150:            nargs="?",
+151:            default=".",
+152:            help="生成先のディレクトリパス（デフォルト: カレントディレクトリ）",
+153:        )
+154:        parser.add_argument(
+155:            "--template",
+156:            "-t",
+157:            choices=list(TEMPLATES.keys()),
+158:            default="basic",
+159:            help="使用するテンプレート（デフォルト: basic）",
+160:        )
+161:        parser.add_argument(
+162:            "--custom", "-c", help="カスタム構造を定義したJSONファイルのパス"
+163:        )
+164:        parser.add_argument(
+165:            "--force", "-f", action="store_true", help="既存のファイルを上書きする"
+166:        )
+167:        parser.add_argument(
+168:            "--list", "-l", action="store_true", help="利用可能なテンプレートを一覧表示する"
+169:        )
+170:    
+171:        args = parser.parse_args()
+172:    
+173:        # テンプレート一覧の表示
+174:        if args.list:
+175:            list_templates()
+176:            return
+177:    
+178:        try:
+179:            # カスタム構造の読み込み
+180:            custom_structure = None
+181:            if args.custom:
+182:                custom_structure = load_custom_structure(args.custom)
+183:    
+184:            # ディレクトリ構造の生成
+185:            success = generate_stab_dir(
+186:                args.target_dir, args.template, custom_structure, args.force
+187:            )
+188:    
+189:            if success:
+190:                print(f"ディレクトリ構造の生成が完了しました: {args.target_dir}")
+191:            else:
+192:                print(
+193:                    "ディレクトリ構造の生成をスキップしました。--force オプションを使用すると強制的に生成できます。"
+194:                )
+195:    
+196:        except Exception as e:
+197:            print(f"エラー: {e}")
+198:            return 1
+199:    
+200:        return 0
+201:    
+202:    
+203:    if __name__ == "__main__":
+204:        import sys
+205:    
+206:        sys.exit(main())
+
+%%%%%%%%%%
+file: ./src/pyteleport/generator/gitignore_stub_generator.py
+%%%%%%%%%%
+0:      """
+1:      .gitignoreのスタブファイルを生成するツール
+2:      
+3:      このモジュールは、一般的なプロジェクトタイプに基づいて.gitignoreファイルのスタブを生成します。
+4:      """
+5:      
+6:      import os
+7:      from pathlib import Path
+8:      from typing import List, Optional, Union
+9:      
+10:     # 一般的なプロジェクトタイプごとの.gitignoreテンプレート
+11:     TEMPLATES = {
+12:         "python": [
+13:             "# Byte-compiled / optimized / DLL files",
+14:             "__pycache__/",
+15:             "*.py[cod]",
+16:             "*$py.class",
+17:             "",
+18:             "# C extensions",
+19:             "*.so",
+20:             "",
+21:             "# Distribution / packaging",
+22:             ".Python",
+23:             "build/",
+24:             "develop-eggs/",
+25:             "dist/",
+26:             "downloads/",
+27:             "eggs/",
+28:             ".eggs/",
+29:             "lib/",
+30:             "lib64/",
+31:             "parts/",
+32:             "sdist/",
+33:             "var/",
+34:             "wheels/",
+35:             "*.egg-info/",
+36:             ".installed.cfg",
+37:             "*.egg",
+38:             "",
+39:             "# PyInstaller",
+40:             "#  Usually these files are written by a python script from a template",
+41:             "#  before PyInstaller builds the exe, so as to inject date/other infos into it.",
+42:             "*.manifest",
+43:             "*.spec",
+44:             "",
+45:             "# Installer logs",
+46:             "pip-log.txt",
+47:             "pip-delete-this-directory.txt",
+48:             "",
+49:             "# Unit test / coverage reports",
+50:             "htmlcov/",
+51:             ".tox/",
+52:             ".coverage",
+53:             ".coverage.*",
+54:             ".cache",
+55:             "nosetests.xml",
+56:             "coverage.xml",
+57:             "*.cover",
+58:             ".hypothesis/",
+59:             ".pytest_cache/",
+60:             "",
+61:             "# Environments",
+62:             ".env",
+63:             ".venv",
+64:             "env/",
+65:             "venv/",
+66:             "ENV/",
+67:             "env.bak/",
+68:             "venv.bak/",
+69:             "",
+70:             "# IDE settings",
+71:             ".idea/",
+72:             ".vscode/",
+73:             "*.swp",
+74:             "*.swo",
+75:         ],
+76:         "node": [
+77:             "# Logs",
+78:             "logs",
+79:             "*.log",
+80:             "npm-debug.log*",
+81:             "yarn-debug.log*",
+82:             "yarn-error.log*",
+83:             "",
+84:             "# Runtime data",
+85:             "pids",
+86:             "*.pid",
+87:             "*.seed",
+88:             "*.pid.lock",
+89:             "",
+90:             "# Dependency directories",
+91:             "node_modules/",
+92:             "jspm_packages/",
+93:             "",
+94:             "# Distribution directories",
+95:             "dist/",
+96:             "build/",
+97:             "",
+98:             "# Optional npm cache directory",
+99:             ".npm",
+100:            "",
+101:            "# Optional eslint cache",
+102:            ".eslintcache",
+103:            "",
+104:            "# dotenv environment variables file",
+105:            ".env",
+106:            "",
+107:            "# IDE settings",
+108:            ".idea/",
+109:            ".vscode/",
+110:        ],
+111:        "java": [
+112:            "# Compiled class file",
+113:            "*.class",
+114:            "",
+115:            "# Log file",
+116:            "*.log",
+117:            "",
+118:            "# BlueJ files",
+119:            "*.ctxt",
+120:            "",
+121:            "# Mobile Tools for Java (J2ME)",
+122:            ".mtj.tmp/",
+123:            "",
+124:            "# Package Files #",
+125:            "*.jar",
+126:            "*.war",
+127:            "*.nar",
+128:            "*.ear",
+129:            "*.zip",
+130:            "*.tar.gz",
+131:            "*.rar",
+132:            "",
+133:            "# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml",
+134:            "hs_err_pid*",
+135:            "",
+136:            "# Maven",
+137:            "target/",
+138:            "pom.xml.tag",
+139:            "pom.xml.releaseBackup",
+140:            "pom.xml.versionsBackup",
+141:            "pom.xml.next",
+142:            "release.properties",
+143:            "dependency-reduced-pom.xml",
+144:            "",
+145:            "# Gradle",
+146:            ".gradle/",
+147:            "build/",
+148:            "",
+149:            "# IDE settings",
+150:            ".idea/",
+151:            ".vscode/",
+152:            "*.iml",
+153:            "*.iws",
+154:            "*.ipr",
+155:            ".classpath",
+156:            ".project",
+157:            ".settings/",
+158:        ],
+159:        "general": [
+160:            "# OS generated files",
+161:            ".DS_Store",
+162:            ".DS_Store?",
+163:            "._*",
+164:            ".Spotlight-V100",
+165:            ".Trashes",
+166:            "ehthumbs.db",
+167:            "Thumbs.db",
+168:            "",
+169:            "# Editor backup files",
+170:            "*~",
+171:            "*.bak",
+172:            "*.swp",
+173:            "*.swo",
+174:            "",
+175:            "# IDE settings",
+176:            ".idea/",
+177:            ".vscode/",
+178:        ],
+179:    }
+180:    
+181:    
+182:    def detect_project_type(directory: Union[str, Path]) -> str:
+183:        """
+184:        ディレクトリの内容に基づいてプロジェクトタイプを検出します。
+185:    
+186:        Args:
+187:            directory: 検査するディレクトリのパス
+188:    
+189:        Returns:
+190:            検出されたプロジェクトタイプ（"python", "node", "java", "general"）
+191:        """
+192:        directory = Path(directory)
+193:    
+194:        # Pythonプロジェクトの検出
+195:        if (
+196:            (directory / "setup.py").exists()
+197:            or (directory / "pyproject.toml").exists()
+198:            or list(directory.glob("*.py"))
+199:        ):
+200:            return "python"
+201:    
+202:        # Node.jsプロジェクトの検出
+203:        if (directory / "package.json").exists() or (directory / "node_modules").exists():
+204:            return "node"
+205:    
+206:        # Javaプロジェクトの検出
+207:        if (
+208:            list(directory.glob("*.java"))
+209:            or (directory / "pom.xml").exists()
+210:            or (directory / "build.gradle").exists()
+211:        ):
+212:            return "java"
+213:    
+214:        # デフォルトは一般的なテンプレート
+215:        return "general"
+216:    
+217:    
+218:    def generate_gitignore(
+219:        directory: Union[str, Path],
+220:        project_type: Optional[str] = None,
+221:        custom_rules: Optional[List[str]] = None,
+222:    ) -> str:
+223:        """
+224:        指定されたプロジェクトタイプに基づいて.gitignoreファイルの内容を生成します。
+225:    
+226:        Args:
+227:            directory: プロジェクトディレクトリのパス
+228:            project_type: プロジェクトタイプ（指定しない場合は自動検出）
+229:            custom_rules: 追加のカスタムルール
+230:    
+231:        Returns:
+232:            生成された.gitignoreファイルの内容
+233:        """
+234:        directory = Path(directory)
+235:    
+236:        # プロジェクトタイプが指定されていない場合は自動検出
+237:        if project_type is None:
+238:            project_type = detect_project_type(directory)
+239:    
+240:        # 指定されたプロジェクトタイプのテンプレートを取得
+241:        if project_type not in TEMPLATES:
+242:            project_type = "general"
+243:    
+244:        template = TEMPLATES[project_type].copy()
+245:    
+246:        # カスタムルールを追加
+247:        if custom_rules:
+248:            template.append("")
+249:            template.append("# Custom rules")
+250:            template.extend(custom_rules)
+251:    
+252:        # テンプレートを文字列に変換
+253:        return "\n".join(template)
+254:    
+255:    
+256:    def create_gitignore_file(
+257:        directory: Union[str, Path],
+258:        project_type: Optional[str] = None,
+259:        custom_rules: Optional[List[str]] = None,
+260:        force: bool = False,
+261:    ) -> bool:
+262:        """
+263:        指定されたディレクトリに.gitignoreファイルを作成します。
+264:    
+265:        Args:
+266:            directory: .gitignoreファイルを作成するディレクトリのパス
+267:            project_type: プロジェクトタイプ（指定しない場合は自動検出）
+268:            custom_rules: 追加のカスタムルール
+269:            force: Trueの場合、既存の.gitignoreファイルを上書きします
+270:    
+271:        Returns:
+272:            ファイルが作成されたかどうか
+273:        """
+274:        directory = Path(directory)
+275:        gitignore_path = directory / ".gitignore"
+276:    
+277:        # 既存の.gitignoreファイルをチェック
+278:        if gitignore_path.exists() and not force:
+279:            return False
+280:    
+281:        # .gitignoreファイルの内容を生成
+282:        content = generate_gitignore(directory, project_type, custom_rules)
+283:    
+284:        # ファイルに書き込み
+285:        with open(gitignore_path, "w") as f:
+286:            f.write(content)
+287:    
+288:        return True
+289:    
+290:    
+291:    if __name__ == "__main__":
+292:        import argparse
+293:    
+294:        parser = argparse.ArgumentParser(
+295:            description=".gitignoreファイルのスタブを生成します。"
+296:        )
+297:        parser.add_argument(
+298:            "directory",
+299:            nargs="?",
+300:            default=".",
+301:            help="プロジェクトディレクトリのパス（デフォルト: カレントディレクトリ）",
+302:        )
+303:        parser.add_argument(
+304:            "--type",
+305:            "-t",
+306:            choices=["python", "node", "java", "general"],
+307:            help="プロジェクトタイプ（指定しない場合は自動検出）",
+308:        )
+309:        parser.add_argument(
+310:            "--custom", "-c", action="append", help="追加のカスタムルール（複数指定可）"
+311:        )
+312:        parser.add_argument(
+313:            "--force",
+314:            "-f",
+315:            action="store_true",
+316:            help="既存の.gitignoreファイルを上書きする",
+317:        )
+318:    
+319:        args = parser.parse_args()
+320:    
+321:        success = create_gitignore_file(args.directory, args.type, args.custom, args.force)
+322:    
+323:        if success:
+324:            print(
+325:                f".gitignoreファイルが作成されました: {os.path.join(args.directory, '.gitignore')}"
+326:            )
+327:        else:
+328:            print(
+329:                f".gitignoreファイルは既に存在します: {os.path.join(args.directory, '.gitignore')}"
+330:            )
+331:            print("上書きするには --force オプションを使用してください。")
+
+%%%%%%%%%%
+file: ./src/pyteleport/rule/base_rule.py
+%%%%%%%%%%
+0:      from abc import ABC, abstractmethod
+1:      
+2:      
+3:      class BaseRule(ABC):
+4:          @abstractmethod
+5:          def matches(self, query: str) -> bool:
+6:              """
+7:              Check if the query matches the inherited rule.
+8:              Args:
+9:                  query: The query to check against the rule.
+10:     
+11:             Returns:
+12:                 bool: True if the query matches the rule, False otherwise.
+13:             """
+14:             
+15:             """sample_code:
+16:             if self.is_include(query):
+17:                 return True
+18:             if self.is_exclude(query):
+19:                 return False
+20:             return True
+21:             """
+22:             raise NotImplementedError
+23:     
+24:         @abstractmethod
+25:         def is_include(self, query: str) -> bool:
+26:             """
+27:             Check if the query matches the include-pattern.
+28:             """
+29:             raise NotImplementedError
+30:     
+31:         @abstractmethod
+32:         def is_exclude(self, query: str) -> bool:
+33:             """
+34:             Check if the query matches the exclude-pattern.
+35:     
+36:             Args:
+37:                 query: The query to check against the rule.
+38:     
+39:             Returns:
+40:                 bool: True if the query matches the rule, False otherwise.
+41:             """
+42:             raise NotImplementedError
+
+%%%%%%%%%%
+file: ./src/pyteleport/rule/rule_factory.py
+%%%%%%%%%%
+0:      import os
+1:      from typing import Any, Dict, List, Optional, Union
+2:      
+3:      from pyteleport.constant import SPECIAL_RULES_RESERVED_WORDS
+4:      from pyteleport.rule import (
+5:          BaseRule,
+6:          CompositeRule,
+7:          DirRule,
+8:          GitignoreRule,
+9:          GlobRule,
+10:         HiddenFileRule,
+11:     )
+12:     
+13:     
+14:     class RuleFactory:
+15:         @staticmethod
+16:         def simplify_create_rule(
+17:             include_patterns: List[str] = None,
+18:             exclude_patterns: List[str] = None,
+19:             special_words: str | List[str] | None = None,
+20:             **kwargs,
+21:         ) -> CompositeRule:
+22:             rule_configs = []
+23:             if special_words is None:
+24:                 special_words = []
+25:             elif isinstance(special_words, str):
+26:                 special_words = [special_words]
+27:             for special_word in special_words:
+28:                 if special_word in SPECIAL_RULES_RESERVED_WORDS.keys():
+29:                     if kwargs.get("gitignore_path") and special_word == "GITIGNORE":
+30:                         rule_configs.append(
+31:                             {
+32:                                 "type": SPECIAL_RULES_RESERVED_WORDS[special_word],
+33:                                 "gitignore_path": kwargs.get("gitignore_path"),
+34:                             }
+35:                         )
+36:                     else:  # hidden_file or dir
+37:                         rule_configs.append(
+38:                             {
+39:                                 "type": SPECIAL_RULES_RESERVED_WORDS[special_word],
+40:                             }
+41:                         )
+42:     
+43:             rule_configs.append(
+44:                 {
+45:                     "type": "glob",
+46:                     "include_patterns": include_patterns,
+47:                     "exclude_patterns": exclude_patterns,
+48:                 }
+49:             )
+50:             return RuleFactory.create_composite_rule(rule_configs)
+51:     
+52:         @staticmethod
+53:         def create_rule(rule_type: str, **kwargs) -> Union[BaseRule, CompositeRule]:
+54:             """
+55:             Create a rule based on the specified rule type and parameters.
+56:     
+57:             Args:
+58:                 rule_type: The type of rule to create ('glob', 'gitignore', 'hidden_file', 'dir', 'composite')
+59:                 **kwargs: Additional parameters specific to the rule type
+60:     
+61:             Returns:
+62:                 The created rule
+63:     
+64:             Raises:
+65:                 ValueError: If the rule type is invalid or required parameters are missing
+66:             """
+67:             if rule_type == "glob":
+68:                 return GlobRule(
+69:                     include_patterns=kwargs.get("include_patterns", []),
+70:                     exclude_patterns=kwargs.get("exclude_patterns", []),
+71:                 )
+72:             elif rule_type == "gitignore":
+73:                 if "gitignore_path" not in kwargs:
+74:                     if os.path.exists("./.gitignore"):
+75:                         rules = GitignoreRule.load("./.gitignore")
+76:                         return CompositeRule(rules=[rules])
+77:                     raise ValueError("gitignore_path is required")
+78:                 rules = GitignoreRule.load(kwargs.get("gitignore_path"))
+79:                 return CompositeRule(rules=[rules])
+80:     
+81:             elif rule_type == "hidden_file":
+82:                 return CompositeRule(rules=[HiddenFileRule()])
+83:     
+84:             elif rule_type == "dir":
+85:                 return CompositeRule(rules=[DirRule()])
+86:             
+87:             elif rule_type == "composite":
+88:                 if "rules" not in kwargs:
+89:                     raise ValueError("rules is required for composite rule")
+90:                 rules_config = kwargs.get("rules")
+91:                 rules = []
+92:                 for rule_config in rules_config:
+93:                     config_copy = rule_config.copy()
+94:                     config_rule_type = config_copy.pop("type")
+95:                     rules.append(RuleFactory.create_rule(config_rule_type, **config_copy))
+96:                 return CompositeRule(rules=rules)
+97:             else:
+98:                 raise ValueError(f"Invalid rule type: {rule_type}")
+99:     
+100:        @staticmethod
+101:        def create_composite_rule(rule_configs: List[Dict[str, Any]]) -> CompositeRule:
+102:            """
+103:            Create a composite rule from a list of rule configurations.
+104:    
+105:            Args:
+106:                rule_configs: List of rule configurations, each containing a 'type' key and other parameters
+107:    
+108:            Returns:
+109:                A CompositeRule that combines all the specified rules
+110:    
+111:            Example:
+112:                >>> rule_configs = [
+113:                ...     {"type": "glob", "include_patterns": ["*.py"]},
+114:                ...     {"type": "hidden_file"}
+115:                ... ]
+116:                >>> rule = RuleFactory.create_composite_rule(rule_configs)
+117:            """
+118:            rules = []
+119:            for config in rule_configs:
+120:                config_copy = config.copy()
+121:                rule_type = config_copy.pop("type")
+122:                rule = RuleFactory.create_rule(rule_type, **config_copy)
+123:                rules.append(rule)
+124:            return CompositeRule(rules=rules)
+
+%%%%%%%%%%
+file: ./src/pyteleport/rule/composite_rule.py
+%%%%%%%%%%
+0:      from typing import List
+1:      
+2:      from pyteleport.rule import BaseRule
+3:      
+4:      
+5:      class CompositeRule(BaseRule):
+6:          """
+7:          A rule that combines multiple rules.
+8:      
+9:          This rule allows you to use multiple rules together. A query matches if it matches
+10:         all the included rules.
+11:     
+12:         Example:
+13:             >>> from pyteleport.rule import GlobRule, HiddenFileRule
+14:             >>> rule1 = GlobRule(include_patterns=["*.py"])
+15:             >>> rule2 = HiddenFileRule()
+16:             >>> composite_rule = CompositeRule(rules=[rule1, rule2])
+17:             >>> composite_rule.matches("test.py")  # Matches rule1 and rule2
+18:             True
+19:             >>> composite_rule.matches(".hidden.py")  # Doesn't match rule2
+20:             False
+21:         """
+22:     
+23:         def __init__(self, rules: List[BaseRule]):
+24:             """
+25:             Initialize a CompositeRule with a list of rules.
+26:     
+27:             Args:
+28:                 rules: List of rules to combine
+29:             """
+30:             self.rules = rules
+31:     
+32:         def matches(self, query: str) -> bool:
+33:             """
+34:             Check if the query matches all rules.
+35:     
+36:             Args:
+37:                 query: The query to check
+38:     
+39:             Returns:
+40:                 True if the query matches all rules, False otherwise
+41:             """
+42:             return all(rule.matches(query) for rule in self.rules)
+43:     
+44:         def is_include(self, query: str) -> bool:
+45:             """
+46:             Check if the query is included by any rule.
+47:             """
+48:             return any(rule.is_include(query) for rule in self.rules)
+49:     
+50:         def is_exclude(self, query: str) -> bool:
+51:             """
+52:             Check if the query is excluded by any rule.
+53:     
+54:             Args:
+55:                 query: The query to check
+56:     
+57:             Returns:
+58:                 True if the query is excluded by any rule, False otherwise
+59:             """
+60:             return any(rule.is_exclude(query) for rule in self.rules)
+61:     
+62:         def append(self, rule: BaseRule) -> None:
+63:             """
+64:             Append a rule to the composite rule.
+65:             """
+66:             if isinstance(rule, CompositeRule):
+67:                 self.rules.extend(rule.rules)
+68:             else:
+69:                 self.rules.append(rule)
+
+%%%%%%%%%%
+file: ./src/pyteleport/rule/module/dir_rule.py
+%%%%%%%%%%
+0:      import os
+1:      
+2:      from pyteleport.rule import BaseRule
+3:      
+4:      
+5:      class DirRule(BaseRule):
+6:          def __init__(self):
+7:              super().__init__()
+8:      
+9:          def matches(self, query: str) -> bool:
+10:             if self.is_include(query):  # dir
+11:                 return True
+12:             else:  # file
+13:                 return False
+14:     
+15:         def is_include(self, query: str) -> bool:
+16:             return os.path.isdir(query)
+17:     
+18:         def is_exclude(self, query: str) -> bool:
+19:             return not os.path.isdir(query)
+
+%%%%%%%%%%
+file: ./src/pyteleport/rule/module/glob_rule.py
+%%%%%%%%%%
+0:      import fnmatch
+1:      
+2:      from pyteleport.rule import BaseRule
+3:      
+4:      
+5:      class GlobRule(BaseRule):
+6:          """
+7:          Judge if a query matches the glob rule.
+8:      
+9:          Args:
+10:             include_patterns: List of glob patterns to include. Default is [".*"] to include everything.
+11:             exclude_patterns: List of glob patterns to exclude. Default is None.
+12:     
+13:         Examples(Asterisk):
+14:         >>> rule = GlobRule(include_patterns=["*.txt"], exclude_patterns=["*.log"])
+15:         >>> rule.matches("test.txt")
+16:         True
+17:         >>> rule.matches("test.log")
+18:         False
+19:     
+20:         Examples(Bracket):
+21:         >>> rule = GlobRule(include_patterns=["[a-c].txt"])
+22:         >>> rule.matches("a.txt")
+23:         True
+24:         >>> rule.matches("d.txt")
+25:         False
+26:         """
+27:     
+28:         def __init__(
+29:             self, include_patterns: list[str] = None, exclude_patterns: list[str] = None
+30:         ):
+31:             super().__init__()
+32:             # The default value for `include_patterns` is [".*"], which matches everything.
+33:             # Therefore, for basic usage, specifying `include_patterns` is not required.
+34:     
+35:             self.include_patterns = (
+36:                 include_patterns if include_patterns is not None else ["*"]
+37:             )
+38:             # default exclude_patterns is []. exclude-target nothing.
+39:             self.exclude_patterns = exclude_patterns if exclude_patterns is not None else []
+40:     
+41:         """
+42:         def matches(self, query: str) -> bool:
+43:             if self.is_include(query):
+44:                 return True
+45:             if self.is_exclude(query):
+46:                 return False
+47:             return True
+48:         """
+49:     
+50:         def matches(self, query: str) -> bool:
+51:             if self.is_include(query):
+52:                 return True
+53:             return False
+54:     
+55:         def _judge_include_or_exclude(self, query: str) -> bool:
+56:             """
+57:             Judge if the query matches the include or exclude patterns.
+58:             - if return True, the query matches the include path.
+59:             - if return False, the query matches the exclude path.
+60:             """
+61:             # exclude
+62:             if any(fnmatch.fnmatch(query, pattern) for pattern in self.exclude_patterns):
+63:                 return False
+64:             # include
+65:             if any(fnmatch.fnmatch(query, pattern) for pattern in self.include_patterns):
+66:                 return True
+67:             # if not match any patterns, return False, but treat as exclude.
+68:             return False
+69:     
+70:         def is_include(self, query: str) -> bool:
+71:             """
+72:             Check if the query matches the include patterns.
+73:             """
+74:             return self._judge_include_or_exclude(query)
+75:     
+76:         def is_exclude(self, query: str) -> bool:
+77:             """
+78:             Check if the query matches the exclude patterns.
+79:             """
+80:             return not self._judge_include_or_exclude(query)
+
+%%%%%%%%%%
+file: ./src/pyteleport/rule/module/gitignore_rule.py
+%%%%%%%%%%
+0:      import pathspec
+1:      
+2:      from pyteleport.constant import CONFUSING_DIRS
+3:      from pyteleport.rule import BaseRule
+4:      
+5:      
+6:      class GitignoreRule(BaseRule):
+7:          """
+8:          Judge if a query matches the gitignore rule.
+9:      
+10:         Args:
+11:             include_patterns: List of patterns to include.
+12:             exclude_patterns: List of patterns to exclude.
+13:     
+14:         Example:
+15:         >>> # Load from .gitignore file
+16:         >>> rule = GitignoreRule(GitignoreRule.load(".gitignore"))
+17:         >>> # Judge if a query matches the gitignore rule
+18:         >>> rule.matches("src/main.py")
+19:         True # src/main.py is included file.
+20:         >>> rule.matches("logs/")
+21:         False # logs/ is excluded file.
+22:         """
+23:     
+24:         def __init__(self, patterns: list[str] = None):
+25:             super().__init__()
+26:             self.spec = pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+27:     
+28:         @classmethod
+29:         def load(cls, gitignore_path: str) -> "GitignoreRule":
+30:             """
+31:             Load patterns from a gitignore file.
+32:     
+33:             Args:
+34:                 gitignore_path: Path to the gitignore file.
+35:             """
+36:             with open(gitignore_path, "r") as f:
+37:                 patterns = []
+38:                 for line in f:
+39:                     line = line.strip()
+40:                     # comment or empty line, skip
+41:                     if line.startswith("#") or line == "":
+42:                         continue
+43:                     patterns.append(line)
+44:                 print(patterns)
+45:                 return cls(patterns)
+46:     
+47:         def _setup_query(self, query: str, is_dir: bool = False) -> str:
+48:             if is_dir and not query.endswith("/"):
+49:                 query = query + "/"
+50:             if not query.startswith("./") or not query.startswith("/"):
+51:                 query = "./" + query
+52:             return query
+53:     
+54:         @staticmethod
+55:         def suffix_weak_hint(query: str) -> bool:
+56:             """
+57:             Check if the query is a file pattern.
+58:             if the query is a file pattern, return False.
+59:             if the query is a directory pattern, return True.
+60:     
+61:             Note:
+62:                 This method is weak because it checks the suffix of the query and only part
+63:                 of hidden directory pattern. It may return False for directory patterns.
+64:     
+65:             Args:
+66:                 query: The query to check.
+67:     
+68:             Returns:
+69:                 True if the query is a directory pattern, False otherwise.
+70:     
+71:             Examples:
+72:                 - "*.py", "file.txt" are file patterns (return False)
+73:                 - "dir", "temp" without extensions are directory patterns (return True)
+74:             """
+75:     
+76:             # Check if the query has a file extension or matches common file patterns
+77:             has_extension = "." in query.split("/")[-1] and not query.endswith("/")
+78:             is_wildcard_file = "*." in query or query.endswith(".*")
+79:     
+80:             # If it has an extension or is a wildcard file pattern, it's a file
+81:             if has_extension or is_wildcard_file:
+82:                 for dir in CONFUSING_DIRS:
+83:                     if query.endswith(dir):
+84:                         return True
+85:                 return False
+86:     
+87:             # Otherwise, treat it as a directory
+88:             return True
+89:     
+90:         def _judge_ignore_file(self, query: str, is_dir: bool | None = None) -> bool:
+91:             if is_dir is None:
+92:                 is_dir = self.suffix_weak_hint(query)
+93:             query = self._setup_query(query, is_dir)
+94:             return self.spec.match_file(query)
+95:     
+96:         def matches(self, query: str, is_dir: bool | None = None) -> bool:
+97:             if self.is_include(query, is_dir): # include
+98:                 return True
+99:             return False # exclude
+100:    
+101:        def is_include(self, query: str, is_dir: bool | None = None) -> bool:
+102:            return not self._judge_ignore_file(query, is_dir)
+103:    
+104:        def is_exclude(self, query: str, is_dir: bool | None = None) -> bool:
+105:            return self._judge_ignore_file(query, is_dir)
+
+%%%%%%%%%%
+file: ./src/pyteleport/rule/module/hidden_file_rule.py
+%%%%%%%%%%
+0:      from pyteleport.rule import BaseRule
+1:      
+2:      
+3:      class HiddenFileRule(BaseRule):
+4:          """
+5:          Judge if a query matches the hidden file rule.
+6:      
+7:          Example:
+8:              >>> rule = HiddenFileRule(hidden_file=True)
+9:              >>> rule.matches("test.py") # not hidden file
+10:             False
+11:             >>> rule.matches(".hidden.py") # hidden file
+12:             True
+13:             >>> rule.is_exclude("test.py") # not hidden file
+14:             False
+15:             >>> rule.is_exclude(".hidden.py") # hidden file
+16:             True
+17:         """
+18:     
+19:         def matches(self, query: str) -> bool:
+20:             if self.is_include(query): # not hidden file
+21:                 return True
+22:             return False # hidden file
+23:     
+24:         def is_include(self, query: str) -> bool:
+25:             return not query.startswith(".") # not hidden file
+26:     
+27:         def is_exclude(self, query: str) -> bool:
+28:             return query.startswith(".") # hidden file
+
+%%%%%%%%%%
+file: ./src/pyteleport/constant/dir.py
+%%%%%%%%%%
+0:      CONFUSING_DIRS = [
+1:          ".git",                # Git repository management directory
+2:          ".github",             # GitHub related configuration directory
+3:          ".gitlab",             # GitLab CI/CD configuration directory
+4:          ".hg",                 # Mercurial repository management directory
+5:          ".svn",                # Subversion management directory
+6:          ".bzr",                # Bazaar version control system directory
+7:          ".cache",              # Cache files directory
+8:          ".config",             # Configuration files directory
+9:          ".vscode",             # VSCode settings directory
+10:         ".idea",               # JetBrains IDE settings directory
+11:         ".vs",                 # Visual Studio settings directory
+12:         ".eclipse",            # Eclipse IDE settings directory
+13:         ".settings",           # Various IDE and tool settings directory
+14:         ".metadata",           # Metadata storage directory
+15:         ".pytest_cache",       # pytest cache directory
+16:         ".ipynb_checkpoints",  # Jupyter notebook checkpoints
+17:         ".tox",                # Python tox environment directory
+18:         ".mypy_cache",         # mypy type checking cache
+19:         ".ruff_cache",         # Ruff linter cache
+20:         ".pylint.d",           # Pylint cache directory
+21:         ".docker",             # Docker configuration directory
+22:         ".kube",               # Kubernetes configuration directory
+23:         ".local",              # Local user settings directory
+24:         ".ssh",                # SSH configuration directory
+25:         ".gnupg",              # GnuPG configuration directory
+26:         ".aws",                # AWS configuration directory
+27:         ".azure",              # Azure configuration directory
+28:         ".gcloud",             # Google Cloud configuration directory
+29:         ".cargo",              # Rust Cargo configuration directory
+30:         ".npm",                # NPM configuration directory
+31:         ".yarn",               # Yarn configuration directory
+32:         ".pnpm",               # PNPM configuration directory
+33:         ".gradle",             # Gradle configuration directory
+34:         ".m2",                 # Maven configuration directory
+35:         ".nuget",              # NuGet configuration directory
+36:         ".bundle",             # Ruby Bundler configuration directory
+37:         ".rbenv",              # Ruby environment management directory
+38:         ".nvm",                # Node Version Manager configuration directory
+39:         ".pyenv",              # Python environment management directory
+40:         ".venv",               # Python virtual environment directory
+41:         ".virtualenv",         # Python virtual environment directory
+42:         ".env",                # Environment variables directory (easily confused with .env file)
+43:         ".next",               # Next.js build directory
+44:         ".nuxt",               # Nuxt.js build directory
+45:         ".angular",            # Angular configuration directory
+46:         ".svelte-kit",         # SvelteKit configuration directory
+47:         ".parcel-cache",       # Parcel bundler cache
+48:         ".webpack",            # Webpack configuration directory
+49:         ".rollup",             # Rollup configuration directory
+50:         ".storybook",          # Storybook configuration directory
+51:         ".cypress",            # Cypress test configuration directory
+52:         ".jest",               # Jest test configuration directory
+53:         ".coverage",           # Code coverage report directory
+54:         ".terraform",          # Terraform configuration directory
+55:         ".ansible",            # Ansible configuration directory
+56:         ".chef",               # Chef configuration directory
+57:         ".puppet",             # Puppet configuration directory
+58:         ".helm",               # Helm configuration directory
+59:         ".circleci",           # CircleCI configuration directory
+60:         ".jenkins",            # Jenkins configuration directory
+61:         ".travis",             # Travis CI configuration directory
+62:         ".github-workflow",    # GitHub Actions configuration directory
+63:         ".husky",              # Husky Git hooks configuration directory
+64:         ".git-hooks",          # Git hooks configuration directory
+65:         ".history",            # Editor history directory
+66:         ".DS_Store",           # macOS system directory (actually a file but often confused)
+67:         ".Trash",              # Trash directory
+68:         ".tmp",                # Temporary files directory
+69:         ".temp",               # Temporary files directory
+70:         ".log",                # Log files directory
+71:         ".logs",               # Log files directory
+72:         ".backup",             # Backup directory
+73:         ".bak",                # Backup directory
+74:         ".old",                # Old files directory
+75:         ".archive",            # Archive directory
+76:         ".dist",               # Distribution build directory
+77:         ".build",              # Build artifacts directory
+78:         ".out",                # Output directory
+79:         ".output",             # Output directory
+80:         ".public",             # Public directory
+81:         ".static",             # Static files directory
+82:         ".assets",             # Assets directory
+83:         ".resources",          # Resources directory
+84:         ".styles",             # Stylesheets directory
+85:         ".scripts",            # Scripts directory
+86:         ".fonts",              # Fonts directory
+87:         ".images",             # Images directory
+88:         ".icons",              # Icons directory
+89:         ".thumbnails",         # Thumbnails directory
+90:         ".translations",       # Translation files directory
+91:         ".locales",            # Locales directory
+92:         ".i18n",               # Internationalization directory
+93:     ]
+
+%%%%%%%%%%
+file: ./src/pyteleport/constant/reserved_word.py
+%%%%%%%%%%
+0:      SPECIAL_RULES_RESERVED_WORDS = {
+1:          "HIDDEN": "hidden_file",
+2:          "DIR": "dir",
+3:          "GITIGNORE": "gitignore",
+4:      }
+
