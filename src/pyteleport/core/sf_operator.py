@@ -1,4 +1,5 @@
 from pyteleport.core._singlefile import _SingleFile
+from pyteleport.core.tui import SelectFromListTUI
 
 
 class SingleFileOperator:
@@ -15,9 +16,19 @@ class SingleFileOperator:
 
 if __name__ == "__main__":
     # SingleFileOperator().get_single_file()
+    """
     print(
         SingleFileOperator()._single_file._nearest_file(
             "onefile.txt",
             "word.py",
         )
     )
+    """
+
+    near_file = SingleFileOperator()._single_file._nearest_file(
+        "onefile.txt",
+        "word.py",
+        topk=1000
+    )
+    text = SelectFromListTUI(near_file)()
+    print(text)
