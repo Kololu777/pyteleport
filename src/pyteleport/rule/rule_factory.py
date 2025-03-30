@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 from pyteleport.constant import SPECIAL_RULES_RESERVED_WORDS
 from pyteleport.rule import (
@@ -84,7 +84,7 @@ class RuleFactory:
 
         elif rule_type == "dir":
             return CompositeRule(rules=[DirRule()])
-        
+
         elif rule_type == "composite":
             if "rules" not in kwargs:
                 raise ValueError("rules is required for composite rule")

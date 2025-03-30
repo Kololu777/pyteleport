@@ -18,12 +18,12 @@ class HiddenFileRule(BaseRule):
     """
 
     def matches(self, query: str) -> bool:
-        if self.is_include(query): # not hidden file
+        if self.is_include(query):  # not hidden file
             return True
-        return False # hidden file
+        return False  # hidden file
 
     def is_include(self, query: str) -> bool:
-        return not query.startswith(".") # not hidden file
+        return not query.startswith(".")  # not hidden file
 
     def is_exclude(self, query: str) -> bool:
-        return query.startswith(".") # hidden file
+        return query.startswith(".")  # hidden file

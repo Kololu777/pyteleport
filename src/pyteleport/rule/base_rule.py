@@ -12,7 +12,7 @@ class BaseRule(ABC):
         Returns:
             bool: True if the query matches the rule, False otherwise.
         """
-        
+
         """sample_code:
         if self.is_include(query):
             return True

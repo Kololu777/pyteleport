@@ -11,7 +11,6 @@ class TestHiddenFileRule:
         rule = HiddenFileRule()
         assert rule.matches(file_name) == expected
 
-
     @pytest.mark.parametrize(
         "file_name, expected", [("test.py", True), (".hidden.py", False)]
     )
