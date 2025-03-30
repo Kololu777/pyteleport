@@ -119,7 +119,10 @@ class TestGitignoreRule:
         [
             ("build", "build/output.txt"),  # build/ pattern
             ("node_modules", "node_modules/package.json"),  # node_modules/** pattern
-            ("src/components/.cache", "src/components/.cache/data.json"),  # **/.cache/ pattern
+            (
+                "src/components/.cache",
+                "src/components/.cache/data.json",
+            ),  # **/.cache/ pattern
         ],
     )
     def test_directory_vs_file_patterns(self, gitignore_rule, dir_path, file_path):

@@ -7,6 +7,8 @@ requires-python = ">=3.10"
 dependencies = [
     "binaryornot>=0.4.4",
     "pathspec>=0.12.1",
+    "prompt-toolkit>=3.0.50",
+    "pyperclip>=1.9.0",
     "pyteleport",
     "rich>=13.9.4",
     "whatthepatch>=1.0.7",

@@ -1,4 +1,5 @@
 import fnmatch
+from pathlib import Path
 
 from pyteleport.rule import BaseRule
 
@@ -60,10 +61,12 @@ class GlobRule(BaseRule):
         - if return False, the query matches the exclude path.
         """
         # exclude
-        if any(fnmatch.fnmatch(query, pattern) for pattern in self.exclude_patterns):
+        #if any(fnmatch.fnmatch(query, pattern) for pattern in self.exclude_patterns):
+        if any(Path(query).match(pattern) for pattern in self.exclude_patterns):
             return False
         # include
-        if any(fnmatch.fnmatch(query, pattern) for pattern in self.include_patterns):
+        #if any(fnmatch.fnmatch(query, pattern) for pattern in self.include_patterns):
+        if any(Path(query).match(pattern) for pattern in self.include_patterns):
             return True
         # if not match any patterns, return False, but treat as exclude.
         return False

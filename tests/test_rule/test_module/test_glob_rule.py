@@ -141,7 +141,6 @@ class TestGlobRule:
         assert glob_rule.is_exclude(query) == expected_exclude
         assert glob_rule.matches(query) == expected_matches
 
-
     @pytest.mark.parametrize(
         "query, expected_include, expected_exclude, expected_matches",
         [

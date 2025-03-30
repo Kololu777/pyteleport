@@ -95,9 +95,9 @@ class GitignoreRule(BaseRule):
         return self.spec.match_file(query)
 
     def matches(self, query: str, is_dir: bool | None = None) -> bool:
-        if self.is_include(query, is_dir): # include
+        if self.is_include(query, is_dir):  # include
             return True
-        return False # exclude
+        return False  # exclude
 
     def is_include(self, query: str, is_dir: bool | None = None) -> bool:
         return not self._judge_ignore_file(query, is_dir)

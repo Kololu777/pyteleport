@@ -8,6 +8,7 @@ from pyteleport.rule import CompositeRule
 from pyteleport.rule.rule_factory import RuleFactory
 from pyteleport.core._singlefile import _SingleFile
 
+
 def teleport_tree(
     path: str,
     rule_fn: CompositeRule | None = None,
@@ -170,10 +171,12 @@ class TeleportTree:
     def add_binary_info(self) -> None:
         self._tree_list = self._judge_binary_file()
 
-    def to_single_file(self, 
-                    template: str | None = None, 
-                    output_path: str | None = None,
-                    is_lineno: bool = False) -> None:
+    def to_single_file(
+        self,
+        output_path: str | None = None,
+        is_lineno: bool = False,
+        template: str | None = None,
+    ) -> None:
         single_file = _SingleFile(self, template, output_path)
         single_file.to_single_file(is_lineno)
 
