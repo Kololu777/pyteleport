@@ -1,4 +1,4 @@
-from prompt_toolkit.application import Application
+#from prompt_toolkit.application import Application
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import Layout
 from prompt_toolkit.layout.containers import HSplit, VSplit, Window
